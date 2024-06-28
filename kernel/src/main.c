@@ -96,14 +96,13 @@ static void hcf() {
     }
 }
 
-typedef struct limine_requests_t 
-{
+typedef struct limine_requests_t {
     struct limine_framebuffer *framebuffer;
 } limine_requests;
 
 static limine_requests gLimineRequests;
 
-limine_requests InitLimineRequests()
+void InitLimineRequests()
 {
     // Ensure the bootloader actually understands our base revision (see spec).
     if( !LIMINE_BASE_REVISION_SUPPORTED )
@@ -119,29 +118,81 @@ limine_requests InitLimineRequests()
 
     // Fetch the first framebuffer.
     limine_requests req = { .framebuffer = framebuffer_request.response->framebuffers[0] };
-    return req;
+    gLimineRequests = req;
+}
+
+typedef struct framebuffer_t {
+    void* address;
+    uint64_t width;
+    uint64_t height;
+    uint64_t pitch;
+    uint16_t bpp;
+    uint8_t memory_model;
+    uint8_t red_mask_size;
+    uint8_t red_mask_shift;
+    uint8_t green_mask_size;
+    uint8_t green_mask_shift;
+    uint8_t blue_mask_size;
+    uint8_t blue_mask_shift;
+} framebuffer;
+
+static framebuffer gFbo;
+
+
+void InitFramebuffer()
+{
+    struct limine_framebuffer* limineFbo = gLimineRequests.framebuffer;
+    framebuffer fbo = {
+        .address = limineFbo->address,
+        .width = limineFbo->width,
+        .height = limineFbo->height,
+        .pitch = limineFbo->pitch,
+        .bpp = limineFbo->bpp,
+        .memory_model = limineFbo->memory_model,
+        .red_mask_size = limineFbo->red_mask_size,
+        .red_mask_shift = limineFbo->red_mask_shift,
+        .green_mask_size = limineFbo->green_mask_size,
+        .green_mask_shift = limineFbo->green_mask_shift,
+        .blue_mask_size = limineFbo->blue_mask_size,
+        .blue_mask_shift = limineFbo->blue_mask_shift,
+    };
+    gFbo = fbo;
 }
 
 // Note: we assume the framebuffer model is RGB with 32-bit pixels.
-void FramebufferPutPixel( int16_t x, int16_t y, uint32_t rgb )
+void FramebufferPutPixel( uint16_t x, uint16_t y, uint32_t rgb )
 {
-    const int16_t fboWidth = gLimineRequests.framebuffer->pitch / 4;
-    volatile uint32_t *fb_ptr = gLimineRequests.framebuffer->address;
-    // TODO: check it's within boundaries
+    if( ( x >= gFbo.width ) || ( y >= gFbo.height ) )
+    {
+        // TODO: panic ?
+    }
+    const uint16_t fboWidth = gFbo.pitch / ( gFbo.bpp / 8 );
+    volatile uint32_t *fb_ptr = gFbo.address;
     fb_ptr[y * fboWidth + x] = rgb;
 }
 
-typedef struct qprint_ctx_t
-{
-    int16_t fboX;
-    int16_t fboY;
+typedef struct qprint_ctx_t {
+    uint16_t x;
+    uint16_t y;
 } qprint_ctx;
 
-//static qprint_ctx = {.fboX = 0, .fboY = 0};
+static qprint_ctx gQprintCtx = {.x = 0, .y = 0};
 
-void qprint( const char* string, uint32_t rgb )
+void QPrint( const char* string, uint32_t rgb )
 {
-    // TODO: Check against FBO if we're overflowing, adjust accordingly 
+    while( *string != 0 ) 
+    {
+        if( gQprintCtx.x >= gFbo.width )
+        {
+            gQprintCtx.x = 0;
+            gQprintCtx.y++;
+        }
+
+        FramebufferPutPixel(gQprintCtx.x, gQprintCtx.y, rgb);
+
+        string++;
+        gQprintCtx.x++;
+    }
 }
 
 // The following will be our kernel's entry point.
@@ -149,12 +200,11 @@ void qprint( const char* string, uint32_t rgb )
 // linker script accordingly.
 void KernelMain() 
 {
-    gLimineRequests = InitLimineRequests();
+    InitLimineRequests();
+    InitFramebuffer();
 
-    for (size_t i = 0; i < 100; i++) 
-    {
-        FramebufferPutPixel(i, i, 0xffffff);
-    }
+
+    QPrint( "Futa Kristos", 0xff5555 );
 
     // We're done, just hang...
     hcf();
