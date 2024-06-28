@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <limine.h>
 
+
 // Set the base revision to 2, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
 // See specification for further info.
@@ -88,35 +89,71 @@ int memcmp(const void *s1, const void *s2, size_t n) {
 }
 
 // Halt and catch fire function.
-static void hcf(void) {
+static void hcf() {
     asm ("cli");
     for (;;) {
         asm ("hlt");
     }
 }
 
-// The following will be our kernel's entry point.
-// If renaming _start() to something else, make sure to change the
-// linker script accordingly.
-void _start(void) {
+typedef struct limine_requests_t 
+{
+    struct limine_framebuffer *framebuffer;
+} limine_requests;
+
+static limine_requests gLimineRequests;
+
+limine_requests InitLimineRequests()
+{
     // Ensure the bootloader actually understands our base revision (see spec).
-    if (LIMINE_BASE_REVISION_SUPPORTED == false) {
+    if( !LIMINE_BASE_REVISION_SUPPORTED )
+    {
         hcf();
     }
 
     // Ensure we got a framebuffer.
-    if (framebuffer_request.response == NULL
-     || framebuffer_request.response->framebuffer_count < 1) {
+    if( !framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1 )
+    {
         hcf();
     }
 
     // Fetch the first framebuffer.
-    struct limine_framebuffer *framebuffer = framebuffer_request.response->framebuffers[0];
+    limine_requests req = { .framebuffer = framebuffer_request.response->framebuffers[0] };
+    return req;
+}
 
-    // Note: we assume the framebuffer model is RGB with 32-bit pixels.
-    for (size_t i = 0; i < 100; i++) {
-        volatile uint32_t *fb_ptr = framebuffer->address;
-        fb_ptr[i * (framebuffer->pitch / 4) + i] = 0xffffff;
+// Note: we assume the framebuffer model is RGB with 32-bit pixels.
+void FramebufferPutPixel( int16_t x, int16_t y, uint32_t rgb )
+{
+    const int16_t fboWidth = gLimineRequests.framebuffer->pitch / 4;
+    volatile uint32_t *fb_ptr = gLimineRequests.framebuffer->address;
+    // TODO: check it's within boundaries
+    fb_ptr[y * fboWidth + x] = rgb;
+}
+
+typedef struct qprint_ctx_t
+{
+    int16_t fboX;
+    int16_t fboY;
+} qprint_ctx;
+
+//static qprint_ctx = {.fboX = 0, .fboY = 0};
+
+void qprint( const char* string, uint32_t rgb )
+{
+    // TODO: Check against FBO if we're overflowing, adjust accordingly 
+}
+
+// The following will be our kernel's entry point.
+// If renaming _start() to something else, make sure to change the
+// linker script accordingly.
+void KernelMain() 
+{
+    gLimineRequests = InitLimineRequests();
+
+    for (size_t i = 0; i < 100; i++) 
+    {
+        FramebufferPutPixel(i, i, 0xffffff);
     }
 
     // We're done, just hang...
