@@ -110,7 +110,7 @@ bin/$(KERNEL): GNUmakefile linker.ld $(OBJ)
 -include $(HEADER_DEPS)
 
 # Compilation rules for *.c files.
-obj/%.c.o: src/%.c GNUmakefile ../limine/limine.h
+obj/%.c.o: src/%.c GNUmakefile src/limine.h
 	mkdir -p "$$(dirname $@)"
 	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
 

@@ -39,6 +39,9 @@ ovmf:
 	mkdir -p ovmf
 	cd ovmf && curl -Lo OVMF.fd https://retrage.github.io/edk2-nightly/bin/RELEASEX64_OVMF.fd
 
+limine/limine:
+	$(MAKE) -C limine
+
 .PHONY: kernel
 kernel:
 	$(MAKE) -C kernel
