@@ -19,7 +19,7 @@ endef
 # We are using the standard "cc" here, it may work by using
 # the host system's toolchain, but this is not guaranteed.
 override DEFAULT_KCC := cc
-$(eval $(call DEFAULT_VAR,KCC,$(DEFAULT_KCC)))
+$(eval $(call DEFAULT_VAR,CC,$(DEFAULT_KCC)))
 
 # Same thing for "ld" (the linker).
 override DEFAULT_KLD := ld
@@ -45,7 +45,7 @@ $(eval $(call DEFAULT_VAR,KLDFLAGS,$(DEFAULT_KLDFLAGS)))
 override KCFLAGS += \
     -Wall \
     -Wextra \
-    -std=gnu11 \
+    -std=gnu17 \
     -ffreestanding \
     -fno-stack-protector \
     -fno-stack-check \
@@ -92,6 +92,7 @@ override HEADER_DEPS := $(addprefix obj/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
 .PHONY: all
 all: bin/$(KERNEL)
 
+# TODO: add src folder
 src/limine.h:
 	curl -Lo $@ https://github.com/limine-bootloader/limine/raw/trunk/limine.h
 
@@ -103,20 +104,20 @@ src/limine.h:
 bin/$(KERNEL): GNUmakefile linker.ld $(OBJ)
 	mkdir -p "$$(dirname $@)"
 	$(KLD) $(OBJ) $(KLDFLAGS) -o $@
-	printf '\x03' | dd of=$@ bs=1 count=1 seek=16 conv=notrunc
+	printf '\003' | dd of=$@ bs=1 count=1 seek=16 conv=notrunc
 
 # Include header dependencies.
 -include $(HEADER_DEPS)
 
 # Compilation rules for *.c files.
-obj/%.c.o: src/%.c GNUmakefile src/limine.h
+obj/%.c.o: src/%.c GNUmakefile ../limine/limine.h
 	mkdir -p "$$(dirname $@)"
-	$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
 
 # Compilation rules for *.S files.
 obj/%.S.o: src/%.S GNUmakefile
 	mkdir -p "$$(dirname $@)"
-	$(KCC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
+	$(CC) $(KCFLAGS) $(KCPPFLAGS) -c $< -o $@
 
 # Compilation rules for *.asm (nasm) files.
 obj/%.asm.o: src/%.asm GNUmakefile
