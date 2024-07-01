@@ -3,6 +3,11 @@
 #include <stdbool.h>
 #include <limine.h>
 
+#include "font.h"
+
+// Utils ?
+#define HIGHEST_BIT_MSK(T) ~( ~0ull >> 1 )
+
 
 // Set the base revision to 2, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -171,27 +176,53 @@ void FramebufferPutPixel( uint16_t x, uint16_t y, uint32_t rgb )
     fb_ptr[y * fboWidth + x] = rgb;
 }
 
-typedef struct qprint_ctx_t {
-    uint16_t x;
-    uint16_t y;
-} qprint_ctx;
+typedef struct fb_console_t {
+    const font_desc* font;
+    uint16_t cursorX;
+    uint16_t cursorY;
+    uint16_t width;
+    uint16_t height;
+} fb_console;
 
-static qprint_ctx gQprintCtx = {.x = 0, .y = 0};
+static fb_console gFbConsole;
+
+void InitFbConsole()
+{
+    fb_console fbConsole = {
+        .font = &defaultMonospace, 
+        .cursorX = 0, 
+        .cursorY = 0, 
+        .width = gFbo.width, 
+        .height = gFbo.height
+    };
+    gFbConsole = fbConsole;
+}
 
 void QPrint( const char* string, uint32_t rgb )
 {
     while( *string != 0 ) 
     {
-        if( gQprintCtx.x >= gFbo.width )
+        if( gFbConsole.cursorX + gFbConsole.font->width >= gFbConsole.width )
         {
-            gQprintCtx.x = 0;
-            gQprintCtx.y++;
+            gFbConsole.cursorX = 0;
+            gFbConsole.cursorY += gFbConsole.font->height;
         }
 
-        FramebufferPutPixel(gQprintCtx.x, gQprintCtx.y, rgb);
-
+        for( size_t y = 0; y < gFbConsole.font->height; y++ )
+        {
+            char start = gFbConsole.font->data[*string * gFbConsole.font->height + y];
+            for( size_t x = 0; x < gFbConsole.font->width; x++ )
+            {
+                if( start & HIGHEST_BIT_MSK(char) ) // Highest bit
+                {
+                    FramebufferPutPixel( gFbConsole.cursorX + x, gFbConsole.cursorY + y, rgb ); // WRONG
+                }
+                start <<= 1;
+            }
+        }
+        
         string++;
-        gQprintCtx.x++;
+        gFbConsole.cursorX += gFbConsole.font->width;
     }
 }
 
@@ -202,9 +233,9 @@ void KernelMain()
 {
     InitLimineRequests();
     InitFramebuffer();
+    InitFbConsole();
 
-
-    QPrint( "Futa Kristos", 0xff5555 );
+    QPrint( "Hello Quakernel !", 0xff5555 );
 
     // We're done, just hang...
     hcf();
