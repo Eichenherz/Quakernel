@@ -45,7 +45,8 @@ $(eval $(call DEFAULT_VAR,KLDFLAGS,$(DEFAULT_KLDFLAGS)))
 override KCFLAGS += \
     -Wall \
     -Wextra \
-    -std=gnu17 \
+    -std=gnu23 \
+    -masm=intel \
     -ffreestanding \
     -fno-stack-protector \
     -fno-stack-check \
@@ -55,8 +56,7 @@ override KCFLAGS += \
     -march=x86-64 \
     -mno-80387 \
     -mno-mmx \
-    -mno-sse \
-    -mno-sse2 \
+    -msse -msse2 -msse3 -msse4.1 -msse4.2 -mssse3 -mavx -mavx2 \
     -mno-red-zone
 
 # Internal C preprocessor flags that should not be changed by the user.

@@ -1,4 +1,5 @@
 /ovmf
 /build
+/log
 *.iso
 *.hdd

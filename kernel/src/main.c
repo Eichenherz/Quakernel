@@ -8,7 +8,17 @@
 // Utils ?
 #define HIGHEST_BIT_MSK(T) ~( ~0ull >> 1 )
 
-
+#define COM1_x86 0x3f8
+static volatile void Com1Putc( char c )
+{
+   asm ("out dx, al;" :: "a"(c), "d"(COM1_x86) :);
+}
+static volatile void Com1Puts( const char* str )
+{
+    do {
+        Com1Putc( *(str++) );
+    } while( *str );
+}
 // Set the base revision to 2, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
 // See specification for further info.
@@ -196,10 +206,12 @@ void InitFbConsole()
         .height = gFbo.height
     };
     gFbConsole = fbConsole;
+    Com1Puts( "\n" );
 }
 
 void QPrint( const char* string, uint32_t rgb )
 {
+    Com1Puts( string );
     while( *string != 0 ) 
     {
         if( gFbConsole.cursorX + gFbConsole.font->width >= gFbConsole.width )
