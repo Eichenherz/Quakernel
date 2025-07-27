@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <limine.h>
+#include <limine/limine.h>
 
 #include "font.h"
 
@@ -9,22 +9,29 @@
 #define HIGHEST_BIT_MSK(T) ~( ~0ull >> 1 )
 
 #define COM1_x86 0x3f8
-static volatile void Com1Putc( char c )
+static void Com1Putc( char c )
 {
-   asm ("out dx, al;" :: "a"(c), "d"(COM1_x86) :);
+    // NOTE: use volatile to prevent the complier form optimizing or reordering this 
+    asm volatile (
+        ".intel_syntax noprefix\n"
+        "out dx, al\n"
+        ".att_syntax prefix\n"
+        :
+        : "a"(c), "d"(COM1_x86)
+    );
 }
-static volatile void Com1Puts( const char* str )
+static void Com1Puts( const char* str )
 {
-    do {
+    while( *str ) {
         Com1Putc( *(str++) );
-    } while( *str );
+    }
 }
-// Set the base revision to 2, this is recommended as this is the latest
+
+// Set the base revision to 3, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
 // See specification for further info.
-
 __attribute__((used, section(".requests")))
-static volatile LIMINE_BASE_REVISION(2);
+static volatile LIMINE_BASE_REVISION(3);
 
 // The Limine requests can be placed anywhere, but it is important that
 // the compiler does not optimise them away, so, usually, they should

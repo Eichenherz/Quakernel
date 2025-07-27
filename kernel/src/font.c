@@ -1,6 +1,6 @@
 #include "font.h"
 
-// NOTE: taken from linux
+// NOTE: taken from https://github.com/torvalds/linux/blob/ec2df4364666a96e7868b7257bc7235bae263dcb/lib/fonts/font_8x16.c
 static const char fontData8x16[] = {
 	/* 0 0x00 '^@' */
 	0x00, /* 00000000 */
@@ -4610,7 +4610,6 @@ static const char fontData8x16[] = {
 	0x00, /* 00000000 */
 	0x00, /* 00000000 */
 };
-
 
 const font_desc defaultMonospace = {
 	.width	= 8,

@@ -3,3 +3,5 @@
 /log
 *.iso
 *.hdd
+/kernel/bin-*
+/kernel/obj-*

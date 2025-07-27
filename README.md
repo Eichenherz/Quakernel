@@ -2,7 +2,6 @@
 
 A minimal kernel designed to run Quake with sw rendering.
 
-Using limine-c-template.
+Based on limine-c-template.
 
 ## TODO
-Use cmake.
