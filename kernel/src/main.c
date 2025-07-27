@@ -1,29 +1,19 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
-#include <limine/limine.h>
+#include <limine.h>
 
-#include "font.h"
+#include "arch/serial.h"
+#include "font/font.h"
 
 // Utils ?
 #define HIGHEST_BIT_MSK(T) ~( ~0ull >> 1 )
 
-#define COM1_x86 0x3f8
-static void Com1Putc( char c )
-{
-    // NOTE: use volatile to prevent the complier form optimizing or reordering this 
-    asm volatile (
-        ".intel_syntax noprefix\n"
-        "out dx, al\n"
-        ".att_syntax prefix\n"
-        :
-        : "a"(c), "d"(COM1_x86)
-    );
-}
+
 static void Com1Puts( const char* str )
 {
     while( *str ) {
-        Com1Putc( *(str++) );
+        PutCharSerial( *(str++) );
     }
 }
 

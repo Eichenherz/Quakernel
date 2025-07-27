@@ -80,8 +80,9 @@ override CFLAGS += \
 
 # Internal C preprocessor flags that should not be changed by the user. #-isystem freestnd-c-hdrs/include 
 override CPPFLAGS := \
-    -I src \
-    -I .. \
+    -I ../limine \
+    -I src/arch/$(ARCH) \
+    -I src/font \
     $(CPPFLAGS) \
     -DLIMINE_API_REVISION=3 \
     -MMD \
@@ -171,8 +172,15 @@ override LDFLAGS += \
 # Use "find" to glob all *.c, *.S, and *.asm files in the tree and obtain the
 # object and header dependency file names.
 override SRCFILES := $(shell find -L src cc-runtime/src -type f 2>/dev/null | LC_ALL=C sort)
+
 override CFILES := $(filter %.c,$(SRCFILES))
+override CFILES := $(shell find src -name '*.c' ! -path "src/arch/*/*") 
+override CFILES += $(shell find src/arch/$(ARCH) -name '*.c')
+
 override ASFILES := $(filter %.S,$(SRCFILES))
+override ASMFILES := $(shell find src -name '*.S' ! -path "src/arch/*/*")
+override ASMFILES += $(shell find src/arch/$(ARCH) -name '*.S')
+
 ifeq ($(ARCH),x86_64)
 override NASMFILES := $(filter %.asm,$(SRCFILES))
 endif
