@@ -10,7 +10,7 @@
 #define HIGHEST_BIT_MSK(T) ~( ~0ull >> 1 )
 
 
-static void Com1Puts( const char* str )
+static void PrintStrSerial( const char* str )
 {
     while( *str ) {
         PutCharSerial( *(str++) );
@@ -34,6 +34,11 @@ static volatile struct limine_framebuffer_request framebuffer_request = {
     .revision = 0
 };
 
+__attribute__((used, section(".requests")))
+static volatile struct limine_dtb_request dtb_request = {
+    .id = LIMINE_DTB_REQUEST,
+    .revision = 0
+};
 // Finally, define the start and end markers for the Limine requests.
 // These can also be moved anywhere, to any .c file, as seen fit.
 
@@ -110,6 +115,7 @@ static void hcf() {
 
 typedef struct limine_requests_t {
     struct limine_framebuffer *framebuffer;
+    const void* pDtb;
 } limine_requests;
 
 static limine_requests gLimineRequests;
@@ -127,9 +133,15 @@ void InitLimineRequests()
     {
         hcf();
     }
-
+    if( !dtb_request.response ) 
+    {
+        hcf();
+    }
     // Fetch the first framebuffer.
-    limine_requests req = { .framebuffer = framebuffer_request.response->framebuffers[0] };
+    limine_requests req = { 
+        .framebuffer = framebuffer_request.response->framebuffers[0], 
+        .pDtb = dtb_request.response.dtb_ptr 
+    };
     gLimineRequests = req;
 }
 
@@ -208,7 +220,7 @@ void InitFbConsole()
 
 void QPrint( const char* string, uint32_t rgb )
 {
-    Com1Puts( string );
+    PrintStrSerial( string );
     while( *string != 0 ) 
     {
         if( gFbConsole.cursorX + gFbConsole.font->width >= gFbConsole.width )

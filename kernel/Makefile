@@ -80,6 +80,7 @@ override CFLAGS += \
 
 # Internal C preprocessor flags that should not be changed by the user. #-isystem freestnd-c-hdrs/include 
 override CPPFLAGS := \
+    -I ../3rdparty \
     -I ../limine \
     -I src/arch/$(ARCH) \
     -I src/font \

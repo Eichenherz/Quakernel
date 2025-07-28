@@ -3,3 +3,6 @@
 	url = https://github.com/limine-bootloader/limine.git
 	branch = v9.x-binary
 	shallow = true
+[submodule "3rdparty/dtc"]
+	path = 3rdparty/dtc
+	url = https://github.com/dgibson/dtc.git
