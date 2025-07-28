@@ -1,8 +1,13 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <stdbool.h>
+
+#define LIMINE_API_REVISION 3
 #include <limine.h>
 
+#include <dtc/libfdt/libfdt.h>
+
+#include "device/uart.h"
 #include "arch/serial.h"
 #include "font/font.h"
 
@@ -39,9 +44,9 @@ static volatile struct limine_dtb_request dtb_request = {
     .id = LIMINE_DTB_REQUEST,
     .revision = 0
 };
+
 // Finally, define the start and end markers for the Limine requests.
 // These can also be moved anywhere, to any .c file, as seen fit.
-
 __attribute__((used, section(".requests_start_marker")))
 static volatile LIMINE_REQUESTS_START_MARKER;
 
@@ -140,7 +145,7 @@ void InitLimineRequests()
     // Fetch the first framebuffer.
     limine_requests req = { 
         .framebuffer = framebuffer_request.response->framebuffers[0], 
-        .pDtb = dtb_request.response.dtb_ptr 
+        .pDtb = dtb_request.response->dtb_ptr 
     };
     gLimineRequests = req;
 }
@@ -245,6 +250,85 @@ void QPrint( const char* string, uint32_t rgb )
         string++;
         gFbConsole.cursorX += gFbConsole.font->width;
     }
+}
+
+const char DEVICE_DTB_OKAY[] = "okay";
+const char DEVICE_DTB_OK[] = "ok";
+
+const char UART_COMPAT[] = "ns16550a";
+const char UART_KY_X1_COMPAT[] = "ky,pxa-uart";
+
+const char* UART_ACCEPTED[] = { UART_COMPAT, UART_KY_X1_COMPAT };
+
+void ParseDtb( const void* pDtb )
+{
+    uint32_t totalSz = fdt_totalsize( pDtb );
+    int errCode = fdt_check_full( pDtb, totalSz );
+    if( errCode ) {
+        // print
+        hcf();
+    }
+
+    int firstFoundUartNodeOffset = -1;
+    for( int currentNodeOffest = 0; currentNodeOffest >= 0; )
+    {
+        const char* pCompatible = (const char*)fdt_getprop( pDtb, currentNodeOffest, "compatible", NULL );
+
+        bool matchedUartProtocol = false;
+        for( int i = 0; i < sizeof( UART_ACCEPTED ); ++i )
+        {
+            const char* uartProtocol = UART_ACCEPTED[i];
+            if( strncmp( pCompatible, uartProtocol, sizeof( uartProtocol ) ) == 0 )
+            {
+                matchedUartProtocol = true;
+                break;
+            }
+        }
+        const char* pStatus = (const char*)fdt_getprop( pDtb, currentNodeOffest, "status", NULL );
+        if( ( strncmp( pStatus, DEVICE_DTB_OKAY, sizeof( DEVICE_DTB_OKAY ) ) == 0 ) 
+            || ( strncmp( pStatus, DEVICE_DTB_OK, sizeof( DEVICE_DTB_OK ) ) == 0 ) )
+        {
+            firstFoundUartNodeOffset = currentNodeOffest;
+            break;
+        }
+
+        currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL );
+    }
+
+    if( firstFoundUartNodeOffset == -1 )
+    {
+        // Print
+        hcf();
+    }
+
+    int parentOffset = fdt_parent_offset( pDtb, firstFoundUartNodeOffset );
+    int addrCells = fdt_address_cells( pDtb, parentOffset );
+    if( addrCells > 2 )
+    {
+        //print we're a 64 bits kernel so our addr space is 64bits, at most 2 FDT addrCells
+        hcf();
+    }
+    int sizeCells = fdt_size_cells( pDtb, parentOffset );
+    if( sizeCells > 2 )
+    {
+        //print we're a 64 bits kernel so our addr space is 64bits, at most 2 FDT sizeCells
+        hcf();
+    }
+  
+    const uint32_t* pReg = (const uint32_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg", NULL );
+    uint16_t regShift = *(const uint16_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-shift", NULL );
+    uint16_t regIOWidth = *(const uint16_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-io-width", NULL );
+
+    uint64_t baseAddr = ( (uint64_t) ( fdt32_to_cpu( pReg[0] ) ) << 32 ) | ( (uint64_t) fdt32_to_cpu( pReg[1] ) );
+    // NOTE: it's absurd for the size to exceed even unit32
+    uint32_t size = fdt32_to_cpu( pReg[3] );
+
+    uart_port serialComPort = {
+        .baseAddr = baseAddr,
+        .size = size,
+        .regShift = fdt16_to_cpu( regShift ),
+        .regIOWidthInBytes = fdt16_to_cpu( regIOWidth )
+    };
 }
 
 // The following will be our kernel's entry point.

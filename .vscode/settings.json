@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "libfdt.h": "c",
+        "limine.h": "c"
+    }
+}
