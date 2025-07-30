@@ -1,24 +1,20 @@
 #include <stdint.h>
 
-// Standard 16550 UART registers, indices for register offsets
-typedef enum uart_16550_register 
+typedef enum uart_standard : uint8_t
 {
-    UART_16550_REG_RBR     = 0x00, // Receiver Buffer Register (read)
-    UART_16550_REG_THR     = 0x00, // Transmitter Holding Register (write) — same as RBR
-    UART_16550_REG_IER     = 0x01, // Interrupt Enable Register
-    UART_16550_REG_IIR     = 0x02, // Interrupt Identification Register (read)
-    UART_16550_REG_FCR     = 0x02, // FIFO Control Register (write) — same as IIR
-    UART_16550_REG_LCR     = 0x03, // Line Control Register
-    UART_16550_REG_MCR     = 0x04, // Modem Control Register
-    UART_16550_REG_LSR     = 0x05, // Line Status Register
-    UART_16550_REG_MSR     = 0x06, // Modem Status Register
-    UART_16550_REG_SCR     = 0x07, // Scratch Register
-} uart_16550_register;
+    UART_STD_INVALID,
+    UART_STD_16550A
+} uart_standard;
 
 typedef struct uart_port 
 {
-    uint64_t baseAddr;
-    uint32_t size;
-    uint16_t regShift;
-    uint16_t regIOWidthInBytes;
+    uint64_t baseAddr;         
+    uint32_t size;              // Size of the entire MMIO region mapped for UART registers (in bytes)
+    uart_standard std;        
+    uint8_t regShift;           // How many bits to shift register index to get offset (e.g., 2 means registers spaced by 4 bytes)
+    uint8_t regIOWidthInBytes;  // Width of registers in bytes (e.g., 1, 2, or 4)
 } uart_port;
+
+extern uart_standard GetUartStdFromDtbCompat( const char* dtbCompat );
+extern bool UartTryReadByteFromRegister( const uart_port* const uartPort, char byte, uint8_t* const _out );
+extern bool UartTryWriteByteToRegister( const uart_port* uartPort, uint8_t dataIn );

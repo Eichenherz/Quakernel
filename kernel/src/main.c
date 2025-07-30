@@ -255,11 +255,6 @@ void QPrint( const char* string, uint32_t rgb )
 const char DEVICE_DTB_OKAY[] = "okay";
 const char DEVICE_DTB_OK[] = "ok";
 
-const char UART_COMPAT[] = "ns16550a";
-const char UART_KY_X1_COMPAT[] = "ky,pxa-uart";
-
-const char* UART_ACCEPTED[] = { UART_COMPAT, UART_KY_X1_COMPAT };
-
 void ParseDtb( const void* pDtb )
 {
     uint32_t totalSz = fdt_totalsize( pDtb );
@@ -270,19 +265,19 @@ void ParseDtb( const void* pDtb )
     }
 
     int firstFoundUartNodeOffset = -1;
-    for( int currentNodeOffest = 0; currentNodeOffest >= 0; )
-    {
+    uart_standard uartStd = UART_STD_INVALID;
+    for( 
+        int currentNodeOffest = 0; 
+        currentNodeOffest >= 0; 
+        currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL )
+    ) {
         const char* pCompatible = (const char*)fdt_getprop( pDtb, currentNodeOffest, "compatible", NULL );
 
+        uartStd = GetUartStdFromDtbCompat (pCompatible );
         bool matchedUartProtocol = false;
-        for( int i = 0; i < sizeof( UART_ACCEPTED ); ++i )
+        if( UART_STD_INVALID == uartStd )
         {
-            const char* uartProtocol = UART_ACCEPTED[i];
-            if( strncmp( pCompatible, uartProtocol, sizeof( uartProtocol ) ) == 0 )
-            {
-                matchedUartProtocol = true;
-                break;
-            }
+            continue;
         }
         const char* pStatus = (const char*)fdt_getprop( pDtb, currentNodeOffest, "status", NULL );
         if( ( strncmp( pStatus, DEVICE_DTB_OKAY, sizeof( DEVICE_DTB_OKAY ) ) == 0 ) 
@@ -291,8 +286,6 @@ void ParseDtb( const void* pDtb )
             firstFoundUartNodeOffset = currentNodeOffest;
             break;
         }
-
-        currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL );
     }
 
     if( firstFoundUartNodeOffset == -1 )
@@ -316,8 +309,9 @@ void ParseDtb( const void* pDtb )
     }
   
     const uint32_t* pReg = (const uint32_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg", NULL );
-    uint16_t regShift = *(const uint16_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-shift", NULL );
-    uint16_t regIOWidth = *(const uint16_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-io-width", NULL );
+    // Len check
+    uint8_t regShift = *(const uint8_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-shift", NULL );
+    uint8_t regIOWidth = *(const uint8_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-io-width", NULL );
 
     uint64_t baseAddr = ( (uint64_t) ( fdt32_to_cpu( pReg[0] ) ) << 32 ) | ( (uint64_t) fdt32_to_cpu( pReg[1] ) );
     // NOTE: it's absurd for the size to exceed even unit32
@@ -326,8 +320,9 @@ void ParseDtb( const void* pDtb )
     uart_port serialComPort = {
         .baseAddr = baseAddr,
         .size = size,
-        .regShift = fdt16_to_cpu( regShift ),
-        .regIOWidthInBytes = fdt16_to_cpu( regIOWidth )
+        .std = uartStd,
+        .regShift = fdt8_to_cpu( regShift ),
+        .regIOWidthInBytes = fdt8_to_cpu( regIOWidth )
     };
 }
 

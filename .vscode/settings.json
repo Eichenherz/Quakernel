@@ -1,6 +1,122 @@
 {
-    "files.associations": {
-        "libfdt.h": "c",
-        "limine.h": "c"
-    }
+	"C_Cpp.default.cStandard": "c23",
+	"editor.semanticHighlighting.enabled": false,
+
+  	"workbench.colorTheme": "Default Dark+",
+	"editor.tokenColorCustomizations": {
+		"textMateRules": [
+			{
+				"scope": [
+				    "punctuation.section.block.begin.bracket.curly",
+        			"punctuation.section.block.end.bracket.curly",
+        			"punctuation.section.brackets.begin.bracket.square",
+        			"punctuation.section.brackets.end.bracket.square",
+        			"punctuation.section.parens.begin.bracket.round",
+        			"punctuation.section.parens.end.bracket.round",
+				  	"punctuation.separator",
+				  	"punctuation.terminator"
+				],
+				"settings": {
+				  "foreground": "#FFFFFF"  // white (or default text color)
+				}
+			},
+			{
+				"scope": [
+					"keyword",
+					"keyword.other",
+					"keyword.control.c",
+					"meta.function.c"
+				],
+				"settings": {
+					"foreground": "#569CD6"  // Keywords — Blue
+				}
+			},
+			{
+				"scope": "entity.name.function.c",
+				"settings": {
+					"foreground": "#ff8c00dc"  // Function names — Bumblebee Orange
+				}
+			},
+			{
+				"scope": [
+					"entity.name.type",
+        			"entity.name.type.struct",
+        			"entity.name.type.enum",
+        			"entity.name.type.typedef",
+        			"entity.name.type.class"
+				],
+				"settings": {
+					"foreground": "#FFC400"  // Types — Bumblebee Yellow
+				}
+			},
+			{
+				"scope": "string.quoted",
+				"settings": {
+					"foreground": "#CE9178"
+				}
+			},
+			{
+				"scope": "comment",
+				"settings": {
+					"foreground": "#6A9955" 
+				}
+			},
+			{
+				"scope": [
+					"meta.definition.variable.c"
+				],
+				"settings": {
+					"foreground": "#c18549"  // Variables & identifiers — Light orange
+				}
+			},
+			{
+				"scope": [
+        			"entity.name.function.preprocessor",
+        			"variable.other.preprocessor"
+      			],
+      			"settings": {
+        			"foreground": "#c254d3"
+      			}
+			},
+			{
+				"scope": [
+				  "keyword.control.directive",                 // e.g., #define, #include
+				  "punctuation.definition.directive",          // the '#' sign
+				  "meta.definition.preprocessor",              // macro body start
+				  "meta.preprocessor",                         // general preprocessor lines
+				  "meta.preprocessor.include"                  // include line
+				],
+				"settings": {
+				  "foreground": "#808080"
+				}
+			},
+			{
+				"scope": [
+				  "variable.parameter",       // function parameters
+				  "variable.parameter.function"
+				],
+				"settings": {
+				  "foreground": "#fffb005c"    // Ghosty, lighter yellow (soft, less contrast)
+				}
+			  },
+			  {
+				"scope": [
+					"variable.other.enummember.c",
+					"variable.other.constant",
+					"variable.other.enummember",
+				  	"variable.other",           // variables
+				  	"variable"                 // general variable names
+				],
+				"settings": {
+				  "foreground": "#b2ae54"  // Darker, warmer yellow/orange for variables
+				}
+			  }
+		]
+	},
+	"files.associations": {
+		"*.h": "c",
+		"libfdt.h": "c",
+	    "limine.h": "c",
+	    "string.h": "c"
+	}
 }
