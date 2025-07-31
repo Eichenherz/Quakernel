@@ -6,15 +6,16 @@ MAKEFLAGS += -rR
 # Change as needed.
 override OUTPUT := kernel
 
-# Target architecture to build for. Default to x86_64.
-ARCH := x86_64
+# User controllable flags. Passed from the main makefile.
+ARCH ?= x86_64
+BUILD ?= ReleaseWithDebugInfo
 
-# Install prefix; /usr/local is a good, standard default pick.
-PREFIX := /usr/local
+CFLAGS ?= -O2 -g -pipe
+CPPFLAGS ?=
+LDFLAGS ?=
 
-# Check if the architecture is supported.
-ifeq ($(filter $(ARCH),aarch64 loongarch64 riscv64 x86_64),)
-    $(error Architecture $(ARCH) not supported)
+ifeq ($(ARCH),x86_64)
+    NASMFLAGS := -F dwarf -g
 endif
 
 # User controllable toolchain and toolchain prefix.
@@ -42,19 +43,6 @@ ifeq ($(TOOLCHAIN),llvm)
     LD := ld.lld
 endif
 
-# User controllable C flags.
-CFLAGS := -g -O2 -pipe
-
-# User controllable C preprocessor flags. We set none by default.
-CPPFLAGS :=
-
-ifeq ($(ARCH),x86_64)
-    # User controllable nasm flags.
-    NASMFLAGS := -F dwarf -g
-endif
-
-# User controllable linker flags. We set none by default.
-LDFLAGS :=
 
 # Ensure the dependencies have been obtained.
 #ifneq ($(shell ( test '$(MAKECMDGOALS)' = clean || test '$(MAKECMDGOALS)' = distclean ); echo $$?),0)
@@ -76,7 +64,8 @@ override CFLAGS += \
     -fno-stack-check \
     -fno-PIC \
     -ffunction-sections \
-    -fdata-sections
+    -fdata-sections \
+    -pipe
 
 # Internal C preprocessor flags that should not be changed by the user. #-isystem freestnd-c-hdrs/include 
 override CPPFLAGS := \
@@ -185,37 +174,37 @@ override ASMFILES += $(shell find src/arch/$(ARCH) -name '*.S')
 ifeq ($(ARCH),x86_64)
 override NASMFILES := $(filter %.asm,$(SRCFILES))
 endif
-override OBJ := $(addprefix obj-$(ARCH)/,$(CFILES:.c=.c.o) $(ASFILES:.S=.S.o))
+override OBJ := $(addprefix obj_$(BUILD)_$(ARCH)/,$(CFILES:.c=.c.o) $(ASFILES:.S=.S.o))
 ifeq ($(ARCH),x86_64)
-override OBJ += $(addprefix obj-$(ARCH)/,$(NASMFILES:.asm=.asm.o))
+override OBJ += $(addprefix obj_$(BUILD)_$(ARCH)/,$(NASMFILES:.asm=.asm.o))
 endif
-override HEADER_DEPS := $(addprefix obj-$(ARCH)/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
+override HEADER_DEPS := $(addprefix obj_$(BUILD)_$(ARCH)/,$(CFILES:.c=.c.d) $(ASFILES:.S=.S.d))
 
 # Default target. This must come first, before header dependencies.
 .PHONY: all
-all: bin-$(ARCH)/$(OUTPUT)
+all: bin_$(BUILD)_$(ARCH)/$(OUTPUT)
 
 # Include header dependencies.
 -include $(HEADER_DEPS)
 
 # Link rules for the final executable.
-bin-$(ARCH)/$(OUTPUT): Makefile linker_scripts/$(ARCH).lds $(OBJ)
+bin_$(BUILD)_$(ARCH)/$(OUTPUT): Makefile linker_scripts/$(ARCH).lds $(OBJ)
 	mkdir -p "$$(dirname $@)"
 	$(LD) $(OBJ) $(LDFLAGS) -o $@
 
 # Compilation rules for *.c files.
-obj-$(ARCH)/%.c.o: %.c Makefile
+obj_$(BUILD)_$(ARCH)/%.c.o: %.c Makefile
 	mkdir -p "$$(dirname $@)"
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
 # Compilation rules for *.S files.
-obj-$(ARCH)/%.S.o: %.S Makefile
+obj_$(BUILD)_$(ARCH)/%.S.o: %.S Makefile
 	mkdir -p "$$(dirname $@)"
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c $< -o $@
 
 ifeq ($(ARCH),x86_64)
 # Compilation rules for *.asm (nasm) files.
-obj-$(ARCH)/%.asm.o: %.asm Makefile
+obj_$(BUILD)_$(ARCH)/%.asm.o: %.asm Makefile
 	mkdir -p "$$(dirname $@)"
 	nasm $(NASMFLAGS) $< -o $@
 endif
@@ -223,21 +212,10 @@ endif
 # Remove object files and the final executable.
 .PHONY: clean
 clean:
-	rm -rf bin-$(ARCH) obj-$(ARCH)
+	rm -rf bin_$(BUILD)_$(ARCH) obj_$(BUILD)_$(ARCH)
 
 # Remove everything built and generated including downloaded dependencies.
 .PHONY: distclean
 distclean:
-	rm -rf bin-* obj-* freestnd-c-hdrs cc-runtime limine-protocol
-
-# Install the final built executable to its final on-root location.
-.PHONY: install
-install: all
-	install -d "$(DESTDIR)$(PREFIX)/share/$(OUTPUT)"
-	install -m 644 bin-$(ARCH)/$(OUTPUT) "$(DESTDIR)$(PREFIX)/share/$(OUTPUT)/$(OUTPUT)-$(ARCH)"
-
-# Try to undo whatever the "install" target did.
-.PHONY: uninstall
-uninstall:
-	rm -f "$(DESTDIR)$(PREFIX)/share/$(OUTPUT)/$(OUTPUT)-$(ARCH)"
-	-rmdir "$(DESTDIR)$(PREFIX)/share/$(OUTPUT)"
+	rm -rf bin_* obj_* 
+    # freestnd-c-hdrs cc-runtime limine-protocol
