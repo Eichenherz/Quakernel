@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ARCH="${1:-x86_64}"
-MEDIA="${2:-iso}"
+IMAGE="${2:?Error: IMAGE is required as third argument}"
 
 
 # Select QEMU binary per arch
@@ -37,16 +37,11 @@ mkdir -p ovmf
   esac
 }
 
-# Image name
-IMAGE_NAME="template-$ARCH"
-
-# Media type
+MEDIA="${IMAGE##*.}" 
 if [[ "$MEDIA" == "iso" ]]; then
-    IMAGE="$IMAGE_NAME.iso"
     [ -f "$IMAGE" ] || { echo "Missing $IMAGE. Run: make $IMAGE"; exit 1; }
     DRIVE="-cdrom $IMAGE"
 elif [[ "$MEDIA" == "hdd" ]]; then
-    IMAGE="$IMAGE_NAME.hdd"
     [ -f "$IMAGE" ] || { echo "Missing $IMAGE. Run: make $IMAGE"; exit 1; }
     DRIVE="-hda $IMAGE"
 else

@@ -54,11 +54,12 @@ endif
 # Check if CC is Clang.
 override CC_IS_CLANG := $(shell ! $(CC) --version 2>/dev/null | grep -q '^Target: '; echo $$?)
 
-# Internal C flags that should not be changed by the user. -nostdinc 
+# Internal C flags that should not be changed by the user. 
 override CFLAGS += \
     -Wall \
     -Wextra \
     -std=gnu23 \
+    -nostdinc \
     -ffreestanding \
     -fno-stack-protector \
     -fno-stack-check \

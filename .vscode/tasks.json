@@ -1,0 +1,43 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build HDD",
+      "type": "shell",
+      "command": "make",
+      "args": [
+        "build-hdd",
+        "TOOLCHAIN=${input:toolchain}",
+        "ARCH=${input:arch}",
+        "BUILD=${input:build}"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always"
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "toolchain",
+      "type": "pickString",
+      "description": "Select Toolchain",
+      "options": ["clang", "gcc"],
+      "default": "clang"
+    },
+    {
+      "id": "arch",
+      "type": "pickString",
+      "description": "Select Architecture",
+      "options": ["x86_64", "aarch64", "riscv64", "loongarch64"],
+      "default": "x86_64"
+    },
+    {
+      "id": "build",
+      "type": "pickString",
+      "description": "Select Build Mode",
+      "options": ["Release", "ReleaseWithDebugInfo", "Debug"],
+      "default": "ReleaseWithDebugInfo"
+    }
+  ]
+}
