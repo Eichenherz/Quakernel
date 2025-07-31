@@ -7,49 +7,18 @@ MAKEFLAGS += -rR
 override OUTPUT := kernel
 
 # User controllable flags. Passed from the main makefile.
-ARCH ?= x86_64
-BUILD ?= ReleaseWithDebugInfo
+ARCH ?=
+BUILD ?= 
 
-CFLAGS ?= -O2 -g -pipe
+CC ?=
+CFLAGS ?= 
 CPPFLAGS ?=
+LD ?=
 LDFLAGS ?=
 
 ifeq ($(ARCH),x86_64)
     NASMFLAGS := -F dwarf -g
 endif
-
-# User controllable toolchain and toolchain prefix.
-TOOLCHAIN :=
-TOOLCHAIN_PREFIX :=
-ifneq ($(TOOLCHAIN),)
-    ifeq ($(TOOLCHAIN_PREFIX),)
-        TOOLCHAIN_PREFIX := $(TOOLCHAIN)-
-    endif
-endif
-
-# User controllable C compiler command.
-ifneq ($(TOOLCHAIN_PREFIX),)
-    CC := $(TOOLCHAIN_PREFIX)gcc
-else
-    CC := cc
-endif
-
-# User controllable linker command.
-LD := $(TOOLCHAIN_PREFIX)ld
-
-# Defaults overrides for variables if using "llvm" as toolchain.
-ifeq ($(TOOLCHAIN),llvm)
-    CC := clang
-    LD := ld.lld
-endif
-
-
-# Ensure the dependencies have been obtained.
-#ifneq ($(shell ( test '$(MAKECMDGOALS)' = clean || test '$(MAKECMDGOALS)' = distclean ); echo $$?),0)
-#    ifeq ($(shell ( ! test -d freestnd-c-hdrs || ! test -d cc-runtime || ! test -d limine-protocol ); echo $$?),0)
-#        $(error Please run the ./get-deps script first)
-#    endif
-#endif
 
 # Check if CC is Clang.
 override CC_IS_CLANG := $(shell ! $(CC) --version 2>/dev/null | grep -q '^Target: '; echo $$?)
@@ -68,12 +37,13 @@ override CFLAGS += \
     -fdata-sections \
     -pipe
 
-# Internal C preprocessor flags that should not be changed by the user. #-isystem freestnd-c-hdrs/include 
+# Internal C preprocessor flags that should not be changed by the user. # freestnd-c-hdrs/include 
 override CPPFLAGS := \
-    -I ../3rdparty \
-    -I ../limine \
-    -I src/arch/$(ARCH) \
-    -I src/font \
+    -I third_party/libfdt/src \
+    -I limine \
+    -I kernel/src \
+    -isystem third_party/freestnd_c_hdrs/include \
+    -isystem nostdinc \
     $(CPPFLAGS) \
     -DLIMINE_API_REVISION=3 \
     -MMD \
@@ -162,15 +132,17 @@ override LDFLAGS += \
 
 # Use "find" to glob all *.c, *.S, and *.asm files in the tree and obtain the
 # object and header dependency file names.
-override SRCFILES := $(shell find -L src cc-runtime/src -type f 2>/dev/null | LC_ALL=C sort)
+override THIRD_PARTY := $(shell find third_party -type f -name '*.c' | grep -v '^third_party/cc_runtime/')
+override NOSTDINC := $(shell find nostdinc -type f -name '*.c' | LC_ALL=C sort)
+override CC_RUNTIME := $(shell find -L third_party/cc_runtime -type f -name '*.c' | LC_ALL=C sort)
+override KERNEL_SRC := $(shell find kernel/src -type f -name '*.c' ! -path 'kernel/src/arch/*')
+override ARCH_SRCS := $(shell find kernel/src/arch/$(ARCH) -type f -name '*.c' | LC_ALL=C sort)
 
-override CFILES := $(filter %.c,$(SRCFILES))
-override CFILES := $(shell find src -name '*.c' ! -path "src/arch/*/*") 
-override CFILES += $(shell find src/arch/$(ARCH) -name '*.c')
+override CFILES := $(NOSTDINC) $(THIRD_PARTY) $(CC_RUNTIME) $(KERNEL_SRC) $(ARCH_SRCS)
 
 override ASFILES := $(filter %.S,$(SRCFILES))
-override ASMFILES := $(shell find src -name '*.S' ! -path "src/arch/*/*")
-override ASMFILES += $(shell find src/arch/$(ARCH) -name '*.S')
+override ASMFILES := $(shell find kernel/src -name '*.S' ! -path "src/kernel/arch/*/*")
+override ASMFILES += $(shell find kernel/src/arch/$(ARCH) -name '*.S')
 
 ifeq ($(ARCH),x86_64)
 override NASMFILES := $(filter %.asm,$(SRCFILES))
@@ -189,7 +161,7 @@ all: bin_$(BUILD)_$(ARCH)/$(OUTPUT)
 -include $(HEADER_DEPS)
 
 # Link rules for the final executable.
-bin_$(BUILD)_$(ARCH)/$(OUTPUT): Makefile linker_scripts/$(ARCH).lds $(OBJ)
+bin_$(BUILD)_$(ARCH)/$(OUTPUT): Makefile kernel/linker_scripts/$(ARCH).lds $(OBJ)
 	mkdir -p "$$(dirname $@)"
 	$(LD) $(OBJ) $(LDFLAGS) -o $@
 
@@ -219,4 +191,3 @@ clean:
 .PHONY: distclean
 distclean:
 	rm -rf bin_* obj_* 
-    # freestnd-c-hdrs cc-runtime limine-protocol

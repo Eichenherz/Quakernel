@@ -9,6 +9,6 @@
 [submodule "third_party/cc_runtime"]
 	path = third_party/cc_runtime
 	url = https://codeberg.org/osdev/cc-runtime
-[submodule "third_party/freestnd_c_hrds"]
-	path = third_party/freestnd_c_hrds
+[submodule "third_party/freestnd_c_hdrs"]
+	path = third_party/freestnd_c_hdrs
 	url = https://codeberg.org/osdev/freestnd-c-hdrs-0bsd.git
