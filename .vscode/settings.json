@@ -1,5 +1,4 @@
 {
-	"C_Cpp.default.cStandard": "c23",
 	"editor.semanticHighlighting.enabled": false,
 
   	"workbench.colorTheme": "Default Dark+",
@@ -118,5 +117,6 @@
 		"libfdt.h": "c",
 	    "limine.h": "c",
 	    "string.h": "c"
-	}
+	},
+	"makefile.configureOnOpen": false
 }

@@ -5,22 +5,19 @@
 #define LIMINE_API_REVISION 3
 #include <limine.h>
 
-#include <dtc/libfdt/libfdt.h>
-
-#include "device/uart.h"
-#include "arch/serial.h"
+#include "utils.h"
+#include "arch/interrupts.h"
+#include "device/dtb_parse.h"
 #include "font/font.h"
 
-// Utils ?
-#define HIGHEST_BIT_MSK(T) ~( ~0ull >> 1 )
 
 
-static void PrintStrSerial( const char* str )
-{
-    while( *str ) {
-        PutCharSerial( *(str++) );
-    }
-}
+//static void PrintStrSerial( const char* str )
+//{
+//    while( *str ) {
+//        PutCharSerial( *(str++) );
+//    }
+//}
 
 // Set the base revision to 3, this is recommended as this is the latest
 // base revision described by the Limine boot protocol specification.
@@ -69,7 +66,6 @@ void *memcpy(void *dest, const void *src, size_t n) {
 
     return dest;
 }
-
 void *memset(void *s, int c, size_t n) {
     uint8_t *p = (uint8_t *)s;
 
@@ -79,7 +75,6 @@ void *memset(void *s, int c, size_t n) {
 
     return s;
 }
-
 void *memmove(void *dest, const void *src, size_t n) {
     uint8_t *pdest = (uint8_t *)dest;
     const uint8_t *psrc = (const uint8_t *)src;
@@ -96,7 +91,6 @@ void *memmove(void *dest, const void *src, size_t n) {
 
     return dest;
 }
-
 int memcmp(const void *s1, const void *s2, size_t n) {
     const uint8_t *p1 = (const uint8_t *)s1;
     const uint8_t *p2 = (const uint8_t *)s2;
@@ -110,47 +104,9 @@ int memcmp(const void *s1, const void *s2, size_t n) {
     return 0;
 }
 
-// Halt and catch fire function.
-static void hcf() {
-    asm ("cli");
-    for (;;) {
-        asm ("hlt");
-    }
-}
 
-typedef struct limine_requests_t {
-    struct limine_framebuffer *framebuffer;
-    const void* pDtb;
-} limine_requests;
-
-static limine_requests gLimineRequests;
-
-void InitLimineRequests()
+typedef struct framebuffer_t 
 {
-    // Ensure the bootloader actually understands our base revision (see spec).
-    if( !LIMINE_BASE_REVISION_SUPPORTED )
-    {
-        hcf();
-    }
-
-    // Ensure we got a framebuffer.
-    if( !framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1 )
-    {
-        hcf();
-    }
-    if( !dtb_request.response ) 
-    {
-        hcf();
-    }
-    // Fetch the first framebuffer.
-    limine_requests req = { 
-        .framebuffer = framebuffer_request.response->framebuffers[0], 
-        .pDtb = dtb_request.response->dtb_ptr 
-    };
-    gLimineRequests = req;
-}
-
-typedef struct framebuffer_t {
     void* address;
     uint64_t width;
     uint64_t height;
@@ -168,9 +124,9 @@ typedef struct framebuffer_t {
 static framebuffer gFbo;
 
 
-void InitFramebuffer()
+framebuffer InitFramebuffer()
 {
-    struct limine_framebuffer* limineFbo = gLimineRequests.framebuffer;
+    struct limine_framebuffer* limineFbo = framebuffer_request.response->framebuffers[0];
     framebuffer fbo = {
         .address = limineFbo->address,
         .width = limineFbo->width,
@@ -185,22 +141,39 @@ void InitFramebuffer()
         .blue_mask_size = limineFbo->blue_mask_size,
         .blue_mask_shift = limineFbo->blue_mask_shift,
     };
-    gFbo = fbo;
+    return fbo;
+}
+
+inline uint32_t PackPixel(
+    uint8_t r, uint8_t g, uint8_t b, 
+    uint8_t rMaskShift, uint8_t gMaskShift, uint8_t bMaskShift,  
+    uint8_t rMaskSize, uint8_t gMaskSize, uint8_t bMaskSize
+) {
+    uint32_t packed = 
+    ( ( r >> (8 - rMaskSize) ) << rMaskShift )
+    | ( ( g >> (8 - gMaskSize) ) << gMaskShift )
+    | ( ( b >> (8 - bMaskSize) ) << bMaskShift );
+    return packed;
 }
 
 // Note: we assume the framebuffer model is RGB with 32-bit pixels.
-void FramebufferPutPixel( uint16_t x, uint16_t y, uint32_t rgb )
+void FramebufferPutPixel( framebuffer* pFbo, uint16_t x, uint16_t y, uint32_t rgb )
 {
-    if( ( x >= gFbo.width ) || ( y >= gFbo.height ) )
+    if( ( x >= pFbo->width ) || ( y >= pFbo->height ) )
     {
-        // TODO: panic ?
+        // TODO: rezise blah blah
+        return;
     }
-    const uint16_t fboWidth = gFbo.pitch / ( gFbo.bpp / 8 );
-    volatile uint32_t *fb_ptr = gFbo.address;
-    fb_ptr[y * fboWidth + x] = rgb;
+    uint64_t bytesPerPixel = pFbo->bpp / 8;
+    // NOTE: avoid division
+    uint64_t index = y * pFbo->pitch + x * bytesPerPixel;
+    volatile uint32_t* pFb = pFbo->address;
+    pFb[index] = rgb;
 }
 
-typedef struct fb_console_t {
+// TODO: add backbuffer ( double ) default to actual fb, present == memcpy
+typedef struct fb_console_t 
+{
     const font_desc* font;
     uint16_t cursorX;
     uint16_t cursorY;
@@ -210,7 +183,7 @@ typedef struct fb_console_t {
 
 static fb_console gFbConsole;
 
-void InitFbConsole()
+fb_console DefaultFbConsole()
 {
     fb_console fbConsole = {
         .font = &defaultMonospace, 
@@ -219,123 +192,63 @@ void InitFbConsole()
         .width = gFbo.width, 
         .height = gFbo.height
     };
-    gFbConsole = fbConsole;
-    Com1Puts( "\n" );
+    return fbConsole;
 }
 
+// TODO: add backend to direct stream, hook multiple straems
 void QPrint( const char* string, uint32_t rgb )
 {
-    PrintStrSerial( string );
-    while( *string != 0 ) 
+    for( ; *string != 0; string++ ) 
     {
-        if( gFbConsole.cursorX + gFbConsole.font->width >= gFbConsole.width )
+        const char currentChar = *string;
+        
+        if( ( '\n' == currentChar ) || ( gFbConsole.cursorX + gFbConsole.font->width >= gFbConsole.width ) )
         {
             gFbConsole.cursorX = 0;
             gFbConsole.cursorY += gFbConsole.font->height;
         }
+        if( gFbConsole.cursorY + gFbConsole.font->height >= gFbConsole.height )
+        {
+            gFbConsole.cursorY = 0;
+            //scroll
+        }
 
         for( size_t y = 0; y < gFbConsole.font->height; y++ )
         {
-            char start = gFbConsole.font->data[*string * gFbConsole.font->height + y];
+            // NOTE: our font table is blocks of width by height in the ASCII order
+            // NOTE: we assume the biggest glyph width is u64
+            const uint64_t currentGlyphRow = gFbConsole.font->data[currentChar * gFbConsole.font->height + y];
+            const uint64_t highestGlyphBitMask = 1ull << ( gFbConsole.font->width-1 );
             for( size_t x = 0; x < gFbConsole.font->width; x++ )
             {
-                if( start & HIGHEST_BIT_MSK(char) ) // Highest bit
+                uint64_t currentGlyphX = currentGlyphRow;
+                if( currentGlyphX & highestGlyphBitMask )
                 {
-                    FramebufferPutPixel( gFbConsole.cursorX + x, gFbConsole.cursorY + y, rgb ); // WRONG
+                    FramebufferPutPixel( &gFbo, gFbConsole.cursorX + x, gFbConsole.cursorY + y, rgb );
                 }
-                start <<= 1;
+                currentGlyphX <<= 1;
             }
         }
         
-        string++;
         gFbConsole.cursorX += gFbConsole.font->width;
     }
 }
 
-const char DEVICE_DTB_OKAY[] = "okay";
-const char DEVICE_DTB_OK[] = "ok";
-
-void ParseDtb( const void* pDtb )
-{
-    uint32_t totalSz = fdt_totalsize( pDtb );
-    int errCode = fdt_check_full( pDtb, totalSz );
-    if( errCode ) {
-        // print
-        hcf();
-    }
-
-    int firstFoundUartNodeOffset = -1;
-    uart_standard uartStd = UART_STD_INVALID;
-    for( 
-        int currentNodeOffest = 0; 
-        currentNodeOffest >= 0; 
-        currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL )
-    ) {
-        const char* pCompatible = (const char*)fdt_getprop( pDtb, currentNodeOffest, "compatible", NULL );
-
-        uartStd = GetUartStdFromDtbCompat (pCompatible );
-        bool matchedUartProtocol = false;
-        if( UART_STD_INVALID == uartStd )
-        {
-            continue;
-        }
-        const char* pStatus = (const char*)fdt_getprop( pDtb, currentNodeOffest, "status", NULL );
-        if( ( strncmp( pStatus, DEVICE_DTB_OKAY, sizeof( DEVICE_DTB_OKAY ) ) == 0 ) 
-            || ( strncmp( pStatus, DEVICE_DTB_OK, sizeof( DEVICE_DTB_OK ) ) == 0 ) )
-        {
-            firstFoundUartNodeOffset = currentNodeOffest;
-            break;
-        }
-    }
-
-    if( firstFoundUartNodeOffset == -1 )
-    {
-        // Print
-        hcf();
-    }
-
-    int parentOffset = fdt_parent_offset( pDtb, firstFoundUartNodeOffset );
-    int addrCells = fdt_address_cells( pDtb, parentOffset );
-    if( addrCells > 2 )
-    {
-        //print we're a 64 bits kernel so our addr space is 64bits, at most 2 FDT addrCells
-        hcf();
-    }
-    int sizeCells = fdt_size_cells( pDtb, parentOffset );
-    if( sizeCells > 2 )
-    {
-        //print we're a 64 bits kernel so our addr space is 64bits, at most 2 FDT sizeCells
-        hcf();
-    }
-  
-    const uint32_t* pReg = (const uint32_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg", NULL );
-    // Len check
-    uint8_t regShift = *(const uint8_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-shift", NULL );
-    uint8_t regIOWidth = *(const uint8_t*) fdt_getprop( pDtb, firstFoundUartNodeOffset, "reg-io-width", NULL );
-
-    uint64_t baseAddr = ( (uint64_t) ( fdt32_to_cpu( pReg[0] ) ) << 32 ) | ( (uint64_t) fdt32_to_cpu( pReg[1] ) );
-    // NOTE: it's absurd for the size to exceed even unit32
-    uint32_t size = fdt32_to_cpu( pReg[3] );
-
-    uart_port serialComPort = {
-        .baseAddr = baseAddr,
-        .size = size,
-        .std = uartStd,
-        .regShift = fdt8_to_cpu( regShift ),
-        .regIOWidthInBytes = fdt8_to_cpu( regIOWidth )
-    };
-}
-
-// The following will be our kernel's entry point.
-// If renaming _start() to something else, make sure to change the
-// linker script accordingly.
+// NOTE: this must match the name in the linker script.
 void KernelMain() 
 {
-    InitLimineRequests();
-    InitFramebuffer();
-    InitFbConsole();
+    // Ensure the bootloader actually understands our base revision (see spec).
+    QK_CHECK( !LIMINE_BASE_REVISION_SUPPORTED );
+    QK_CHECK( !framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1 );
+    QK_CHECK( !dtb_request.response || dtb_request.response->dtb_ptr == NULL );
+
+    gFbo = InitFramebuffer();
+    gFbConsole = DefaultFbConsole();
 
     QPrint( "Hello Quakernel !", 0xff5555 );
+    
+    ValidateDtb( dtb_request.response->dtb_ptr );
+    
 
     // We're done, just hang...
     hcf();
