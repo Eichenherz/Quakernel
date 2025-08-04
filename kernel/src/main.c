@@ -5,10 +5,13 @@
 #define LIMINE_API_REVISION 3
 #include <limine.h>
 
-#include "utils.h"
+#include <c_macros.h>
+#include <c_lib.h>
+
 #include "arch/interrupts.h"
 #include "device/dtb_parse.h"
 #include "font/font.h"
+#include "device/memory.h"
 
 
 
@@ -49,6 +52,12 @@ static volatile LIMINE_REQUESTS_START_MARKER;
 
 __attribute__((used, section(".requests_end_marker")))
 static volatile LIMINE_REQUESTS_END_MARKER;
+
+
+// LINKER_SYMBOLS
+extern uint8_t __kernel_start[];
+extern uint8_t __kernel_end[];
+//================================
 
 // GCC and Clang reserve the right to generate calls to the following
 // 4 functions even if they are not directly called.
@@ -110,8 +119,8 @@ typedef struct framebuffer_t
     void* address;
     uint64_t width;
     uint64_t height;
-    uint64_t pitch;
-    uint16_t bpp;
+    uint64_t bytesPerRow;
+    uint16_t bitsPerPixel;
     uint8_t memory_model;
     uint8_t red_mask_size;
     uint8_t red_mask_shift;
@@ -119,20 +128,20 @@ typedef struct framebuffer_t
     uint8_t green_mask_shift;
     uint8_t blue_mask_size;
     uint8_t blue_mask_shift;
-} framebuffer;
+} framebuffer_t;
 
-static framebuffer gFbo;
+static framebuffer_t gFbo;
 
 
-framebuffer InitFramebuffer()
+framebuffer_t InitFramebuffer()
 {
     struct limine_framebuffer* limineFbo = framebuffer_request.response->framebuffers[0];
-    framebuffer fbo = {
+    framebuffer_t fbo = {
         .address = limineFbo->address,
         .width = limineFbo->width,
         .height = limineFbo->height,
-        .pitch = limineFbo->pitch,
-        .bpp = limineFbo->bpp,
+        .bytesPerRow = limineFbo->pitch,
+        .bitsPerPixel = limineFbo->bpp,
         .memory_model = limineFbo->memory_model,
         .red_mask_size = limineFbo->red_mask_size,
         .red_mask_shift = limineFbo->red_mask_shift,
@@ -142,6 +151,11 @@ framebuffer InitFramebuffer()
         .blue_mask_shift = limineFbo->blue_mask_shift,
     };
     return fbo;
+}
+
+uint64_t FramebufferGetSizeInBytes( const framebuffer_t* const pFb )
+{
+    return pFb->height * pFb->bytesPerRow;
 }
 
 inline uint32_t PackPixel(
@@ -157,16 +171,16 @@ inline uint32_t PackPixel(
 }
 
 // Note: we assume the framebuffer model is RGB with 32-bit pixels.
-void FramebufferPutPixel( framebuffer* pFbo, uint16_t x, uint16_t y, uint32_t rgb )
+void FramebufferPutPixel( framebuffer_t* pFbo, uint16_t x, uint16_t y, uint32_t rgb )
 {
     if( ( x >= pFbo->width ) || ( y >= pFbo->height ) )
     {
         // TODO: rezise blah blah
         return;
     }
-    uint64_t bytesPerPixel = pFbo->bpp / 8;
+    uint64_t bytesPerPixel = pFbo->bitsPerPixel / 8;
     // NOTE: avoid division
-    uint64_t index = y * pFbo->pitch + x * bytesPerPixel;
+    uint64_t index = y * pFbo->bytesPerRow + x * bytesPerPixel;
     volatile uint32_t* pFb = pFbo->address;
     pFb[index] = rgb;
 }
@@ -234,9 +248,41 @@ void QPrint( const char* string, uint32_t rgb )
     }
 }
 
+typedef int (*CompareFunc)(const void*, const void*);
+
+void InsertionSort( uint8_t* arrayBase, uint64_t elemCount, uint64_t elemSize, CompareFunc pCompareFunctor ) 
+{
+    uint8_t key[256];
+    QK_CHECK( elemSize > ARRAY_LEN( key ) );
+
+    for( uint64_t i = 1; i < elemCount; i++ ) 
+    {
+        memcpy( key, arrayBase + i * elemSize, elemSize );
+
+        int64_t j = i - 1;
+        for( ; j >= 0 && pCompareFunctor( arrayBase + j * elemSize, key ) > 0; --j ) 
+        {
+            memcpy( arrayBase + (j + 1) * elemSize, arrayBase + j * elemSize, elemSize );
+        }
+        memcpy( arrayBase + (j + 1) * elemSize, key, elemSize );
+    }
+}
+
+int CompareMemBlocksByAddr( const void* const a, const void* const b ) 
+{
+    const mem_block_t* const ia = a;
+    const mem_block_t* const ib = b;
+    if( ia->baseAddr < ib->baseAddr ) return -1;
+    if( ia->baseAddr > ib->baseAddr ) return 1;
+    return 0;
+}
+
 // NOTE: this must match the name in the linker script.
 void KernelMain() 
 {
+    const uint64_t QUAKERNEL_ADDR = (uint64_t)__kernel_start;
+    const uint64_t QUAKERNEL_SIZE = (uint64_t)__kernel_end - (uint64_t)__kernel_start;
+
     // Ensure the bootloader actually understands our base revision (see spec).
     QK_CHECK( !LIMINE_BASE_REVISION_SUPPORTED );
     QK_CHECK( !framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1 );
@@ -246,9 +292,34 @@ void KernelMain()
     gFbConsole = DefaultFbConsole();
 
     QPrint( "Hello Quakernel !", 0xff5555 );
+
+    const void* pDtb = dtb_request.response->dtb_ptr;
+    ValidateDtb( pDtb );
     
-    ValidateDtb( dtb_request.response->dtb_ptr );
-    
+    mem_block_t ramRegions[MAX_RESEVERD_PHYSICAL_MEMORY_BLOCKS];
+    uint64_t ramRegionsCount;
+    DtbGetPhysicalMemory( pDtb, ARRAY_LEN( ramRegions ), ramRegions, &ramRegionsCount );
+
+    const uint64_t fboSizeInBytes = FramebufferGetSizeInBytes( &gFbo );
+    // NOTE: ideally these should never overlap
+    // TODO: check ?
+    mem_block_t occupiedRegions[] = {
+        { .baseAddr = gFbo.address, .size = fboSizeInBytes },
+        { .baseAddr = pDtb, .size = DtbGetSize( pDtb ) },
+        { .baseAddr = QUAKERNEL_ADDR, .size = QUAKERNEL_SIZE },
+    };
+    // NOTE: makes the region computing easier
+    InsertionSort( occupiedRegions, ARRAY_LEN(occupiedRegions), sizeof( occupiedRegions[0] ), CompareMemBlocksByAddr );
+
+    // NOTE: each occupied region can split the block into at most 2 free regions
+    const uint64_t MAX_FREE_MEM_BLOCKS = 2 * ARRAY_LEN( occupiedRegions ) * MAX_RESEVERD_PHYSICAL_MEMORY_BLOCKS;
+    mem_block_t freeMemBlocks[MAX_FREE_MEM_BLOCKS];
+    uint64_t freeMemBlocksCount = 0;
+
+    QKEmitFreeAlignedMemBlocks( 
+        ramRegions, ramRegionsCount, occupiedRegions, ARRAY_LEN(occupiedRegions), freeMemBlocks, &freeMemBlocksCount 
+    );
+
 
     // We're done, just hang...
     hcf();

@@ -1,94 +1,258 @@
 #include "dtb_parse.h"
 #include "uart.h"
+#include "../arch/interrupts.h"
 
-#include <dtc/libfdt/libfdt.h>
+#include <libfdt.h>
+
+const char DTB_DEVICE_STATUS_OKAY[] = "okay";
+const char DTB_DEVICE_STATUS_OK[] = "ok";
+
+typedef struct dtb_interrupt_request
+{
+    uint32_t deviceDtbPhandle;
+    uint32_t intControllerDtbPhandle;
+    uint16_t requestNum;
+} dtb_interrupt_request;
 
 
-bool ValidateDtb(const void* pDtb)
+typedef enum dtb_uint_type : uint8_t 
+{
+    DTB_UINT_NONE = 0,
+    DTB_UINT_U32,
+    DTB_UINT_U64
+} uint_type;
+
+typedef struct dtb_size_t 
+{
+    dtb_uint_type type;
+    union 
+    {
+        uint32_t u32;
+        uint64_t u64;
+    };
+} dtb_size_t;
+
+// NOTE: it's common for kernels to treat missing status as "enabled"
+static bool CheckOkFdtNodeStatus( const void* pDtb, int nodeOffset )
+{
+    const char* pStatus = (const char*)fdt_getprop( pDtb, nodeOffset, "status", NULL );
+    if( !pStatus ) { return true; }
+
+    return ( strncmp( pStatus, DTB_DEVICE_STATUS_OKAY, sizeof( DTB_DEVICE_STATUS_OKAY ) ) == 0 ) 
+            || ( strncmp( pStatus, DTB_DEVICE_STATUS_OK, sizeof( DTB_DEVICE_STATUS_OK ) ) == 0 );
+}
+static int ParseNodeRegister( const void* pDtb, int nodeOffset, uint64_t* restrict addr, uint64_t* restrict size )
+{
+    // TODO: get the parent offset more efficiently
+    int parentOffset = fdt_parent_offset( pDtb, nodeOffset );
+    if( parentOffset < 0 )
+    {
+        return parentOffset;
+    }
+    int addrCells = fdt_address_cells( pDtb, parentOffset );
+    if( addrCells < 0 )
+    {
+        return addrCells;
+    }
+    int sizeCells = fdt_size_cells( pDtb, parentOffset );
+    if( sizeCells < 0 )
+    {
+        return sizeCells;
+    }
+
+    const uint32_t* pReg = (const uint32_t*) fdt_getprop( pDtb, nodeOffset, "reg", NULL );
+
+    uint64_t sizeFieldOffset = 0;
+
+    if( 0 == addrCells )
+    {
+        *addr = 0;
+    }
+    else 
+    {
+        uint64_t baseAddr = fdt32_to_cpu( pReg[0] );
+        if( 2 == addrCells )
+        {
+            baseAddr = ( baseAddr << 32 ) | ( (uint64_t) fdt32_to_cpu( pReg[1] ) );
+            *addr = baseAddr;
+
+            sizeFieldOffset = 2;
+        }
+        else
+        {
+            *addr = baseAddr;
+            sizeFieldOffset = 1;
+        }
+    }
+    if( 0 == sizeCells )
+    {
+        *size = 0;
+    }
+    else 
+    {
+        uint64_t sz = fdt32_to_cpu( pReg[0 + sizeFieldOffset] );
+        if( 2 == sizeCells )
+        {
+            sz = ( sz << 32 ) | ( (uint64_t) fdt32_to_cpu( pReg[1 + sizeFieldOffset] ) );
+            *size = sz;
+        }
+        else
+        {
+            *size = sz;
+        }
+    }
+
+    return 0;
+}
+
+void ValidateDtb( const void* pDtb )
 {
     uint32_t totalSz = fdt_totalsize( pDtb );
     int errCode = fdt_check_full( pDtb, totalSz );
-    if( errCode ) {
+    if( errCode ) 
+    {
         // print
         hcf();
     }
 }
 
-const char DTB_DEVICE_STATUS_OKAY[] = "okay";
-const char DTB_DEVICE_STATUS_OK[] = "ok";
-
-// TODO: err check all props
-// TODO: cache currentNodeOffest in order to get uarts on demand
-// NOTE: uartNodeOffest = 0 to fidn the first
-uart_port DtbGeNexttUartPort( const void* pDtb, int uartNodeOffest )
+void DtbGetPhysicalMemory( const void* pDtb, uint64_t maxRamCount, mem_block_t* restrict pRam, uint64_t* restrict pRamCount )
 {
-    int thisUartNodeOffset = -1;
-    uart_standard uartStd = UART_STD_INVALID;
+    *pRamCount = 0;
 
-    for( ; uartNodeOffest >= 0; uartNodeOffest = fdt_next_node( pDtb, uartNodeOffest, NULL ) ) 
+    for( int currentNodeOffest = 0; currentNodeOffest >= 0; currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL ) ) 
     {
-        const char* pCompatible = (const char*)fdt_getprop( pDtb, uartNodeOffest, "compatible", NULL );
-        if( !pCompatible ) { continue; }
+        // TODO: we'll look maybe parse stuff that doesn't have the compat field, unitl then !
+        const char* pDeviceType = (const char*)fdt_getprop( pDtb, currentNodeOffest, "device-type", NULL );
+        if( !pDeviceType ) { continue; }
 
-        uartStd = GetUartStdFromDtbCompat( pCompatible );
-        if( UART_STD_INVALID == uartStd ) { continue; }
-
-        const char* pStatus = (const char*)fdt_getprop( pDtb, uartNodeOffest, "status", NULL );
-        if( !pStatus ) { continue; }
-
-        if( ( strncmp( pStatus, DTB_DEVICE_STATUS_OKAY, sizeof( DTB_DEVICE_STATUS_OKAY ) ) == 0 ) 
-            || ( strncmp( pStatus, DTB_DEVICE_STATUS_OK, sizeof( DTB_DEVICE_STATUS_OK ) ) == 0 ) 
+        const char DEVICE_TYPE_MEMORY[] = "memory";
+        if( 
+            ( strncmp( pDeviceType, DEVICE_TYPE_MEMORY, sizeof( DEVICE_TYPE_MEMORY ) ) == 0 ) 
+            && CheckOkFdtNodeStatus( pDtb, currentNodeOffest )
         ) {
-            thisUartNodeOffset = uartNodeOffest;
-            break;
+            uint64_t addr, size;
+            int errCode = ParseNodeRegister( pDtb, currentNodeOffest, &addr, &size );
+            if( errCode < 0 )
+            {
+                hcf();
+            }
+
+            if( *pRamCount < maxRamCount )
+            {
+                pRam[*pRamCount] = (mem_block_t) { .baseAddr = addr, .size = size };
+            }
+            else break;
         }
     }
+}
 
-    if( thisUartNodeOffset == -1 )
+// TODO: err check all props
+void ParseDtb( const void* pDtb )
+{
+    for( int currentNodeOffest = 0; currentNodeOffest >= 0; currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL ) ) 
     {
-        // Print
-        hcf();
-    }
+        // TODO: we'll look maybe parse stuff that doesn't have the compat field, unitl then !
+        const char* pCompatible = (const char*)fdt_getprop( pDtb, currentNodeOffest, "compatible", NULL );
+        if( !pCompatible ) { continue; }
 
-    // TODO: get the parent offset more efficiently
-    int parentOffset = fdt_parent_offset( pDtb, thisUartNodeOffset );
-    if( parentOffset < 0 )
-    {
-        // Err
-    }
-    int addrCells = fdt_address_cells( pDtb, parentOffset );
-    if( addrCells < 0 )
-    {
-        // Err
-    }
-    if( addrCells > 2 )
-    {
-        //print we're a 64 bits kernel so our addr space is 64bits, at most 2 FDT addrCells
-        hcf();
-    }
-    int sizeCells = fdt_size_cells( pDtb, parentOffset );
-    if( sizeCells > 2 )
-    {
-        //print we're a 64 bits kernel so our addr space is 64bits, at most 2 FDT sizeCells
-        hcf();
-    }
-  
-    const uint32_t* pReg = (const uint32_t*) fdt_getprop( pDtb, thisUartNodeOffset, "reg", NULL );
-    // Len check
-    uint8_t regShift = *(const uint8_t*) fdt_getprop( pDtb, thisUartNodeOffset, "reg-shift", NULL );
-    uint8_t regIOWidth = *(const uint8_t*) fdt_getprop( pDtb, thisUartNodeOffset, "reg-io-width", NULL );
+        const char* pIntCtrlTag = (const char*)fdt_getprop( pDtb, currentNodeOffest, "interrupt-controller", NULL );
+        interrupt_controller_type intCtrlType = GetIntCtrlTypeFromDtbCompat( pCompatible );
+        if( INC_INVALID != intCtrlType && pIntCtrlTag ) 
+        { 
+            uint64_t addr, size;
+            int errCode = ParseNodeRegister( pDtb, currentNodeOffest, &addr, &size );
+            if( errCode < 0 )
+            {
+                hcf();
+            }
+            
+            int lenOrErrCodeHolder;
+            const uint32_t* const pHandle = fdt_getprop( pDtb, currentNodeOffest, "phandle", &lenOrErrCodeHolder );
+            if( !pHandle )
+            {
+                // err lenOrErrCodeHolder
+            }
 
-    uint64_t baseAddr = ( (uint64_t) ( fdt32_to_cpu( pReg[0] ) ) << 32 ) | ( (uint64_t) fdt32_to_cpu( pReg[1] ) );
-    // NOTE: it's absurd for the size to exceed even unit32
-    uint32_t size = fdt32_to_cpu( pReg[3] );
+            interrupt_controller intCtl = {
+                .baseAddr = addr,
+                .regSize = size,
+                .phandle = fdt32_to_cpu(*pHandle),
+                .type = intCtrlType
+            };
 
-    uart_port serialComPort = {
-        .baseAddr = baseAddr,
-        .size = size,
-        .std = uartStd,
-        .regShift = fdt8_to_cpu( regShift ),
-        .regIOWidthInBytes = fdt8_to_cpu( regIOWidth )
-    };
+            continue;
+        }
 
-    return serialComPort;
+        uart_standard uartStd = GetUartStdFromDtbCompat( pCompatible );
+        if( UART_STD_INVALID != uartStd ) 
+        { 
+            if( CheckOkFdtNodeStatus( pDtb, currentNodeOffest ) ) 
+            {
+
+                uint64_t addr, size;
+                int errCode = ParseNodeRegister( pDtb, currentNodeOffest, &addr, &size );
+                if( errCode < 0 )
+                {
+                    hcf();
+                }
+                // TODO: if addr or size == 0 means smth like device is disabled...
+
+                // Len check
+                int lenOrErrCodeHolder;
+                const void* const pRegShift = fdt_getprop( pDtb, currentNodeOffest, "reg-shift", &lenOrErrCodeHolder );
+                if( !pRegShift )
+                {
+                    // err lenOrErrCodeHolder
+                }
+                // assert len ?
+                const void* const pRegIOWidth = fdt_getprop( pDtb, currentNodeOffest, "reg-io-width", &lenOrErrCodeHolder );
+                if( !pRegIOWidth )
+                {
+                    // err lenOrErrCodeHolder
+                }
+                const uint32_t* const pHandle = fdt_getprop( pDtb, currentNodeOffest, "phandle", &lenOrErrCodeHolder );
+                if( !pHandle )
+                {
+                    // err lenOrErrCodeHolder
+                }
+
+                uint32_t regShift = *(const uint32_t* const) pRegShift;
+                uint32_t regIOWidth = *(const uint32_t* const) pRegIOWidth;
+                uart_port serialComPort = {
+                    .baseAddr = addr,
+                    .size = size,
+                    .phandle = fdt32_to_cpu(*pHandle),
+                    .std = uartStd,
+                    .regShift = fdt32_to_cpu( regShift ),
+                    .regIOWidthInBytes = fdt32_to_cpu( regIOWidth )
+                };
+            }
+
+            continue; 
+        }
+        
+        if( CheckOkFdtNodeStatus( pDtb, currentNodeOffest ) )
+        {
+            int lenOrErrCodeHolder;
+            const uint32_t* const pIntParent = fdt_getprop( pDtb, currentNodeOffest, "interrupt-parent", &lenOrErrCodeHolder );
+            if( !pHandle )
+            {
+                // err lenOrErrCodeHolder
+            }
+
+            int numInterruptsOrErrCodeHolder;
+            const uint32_t* pInterrupts = fdt_getprop( pDtb, currentNodeOffest, "interrupts", &lenOrErrCodeHolder );
+            if( !pHandle )
+            {
+                // err lenOrErrCodeHolder
+            }
+            const uint32_t* const pHandle = fdt_getprop( pDtb, currentNodeOffest, "phandle", &lenOrErrCodeHolder );
+            if( !pHandle )
+            {
+                // err lenOrErrCodeHolder
+            }
+        }
+
+    }
 }

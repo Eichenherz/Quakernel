@@ -115,8 +115,11 @@
 	"files.associations": {
 		"*.h": "c",
 		"libfdt.h": "c",
-	    "limine.h": "c",
-	    "string.h": "c"
+		"limine.h": "c",
+		"string.h": "c",
+		"compare": "c",
+		"type_traits": "c",
+		"utility": "c"
 	},
 	"makefile.configureOnOpen": false
 }

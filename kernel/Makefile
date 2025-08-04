@@ -44,6 +44,7 @@ override CPPFLAGS := \
     -I kernel/src \
     -isystem third_party/freestnd_c_hdrs/include \
     -isystem nostdinc \
+    -isystem kernel/src/lib
     $(CPPFLAGS) \
     -DLIMINE_API_REVISION=3 \
     -MMD \
