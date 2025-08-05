@@ -116,37 +116,6 @@ void ValidateDtb( const void* pDtb )
     }
 }
 
-void DtbGetPhysicalMemory( const void* pDtb, uint64_t maxRamCount, mem_block_t* restrict pRam, uint64_t* restrict pRamCount )
-{
-    *pRamCount = 0;
-
-    for( int currentNodeOffest = 0; currentNodeOffest >= 0; currentNodeOffest = fdt_next_node( pDtb, currentNodeOffest, NULL ) ) 
-    {
-        // TODO: we'll look maybe parse stuff that doesn't have the compat field, unitl then !
-        const char* pDeviceType = (const char*)fdt_getprop( pDtb, currentNodeOffest, "device-type", NULL );
-        if( !pDeviceType ) { continue; }
-
-        const char DEVICE_TYPE_MEMORY[] = "memory";
-        if( 
-            ( strncmp( pDeviceType, DEVICE_TYPE_MEMORY, sizeof( DEVICE_TYPE_MEMORY ) ) == 0 ) 
-            && CheckOkFdtNodeStatus( pDtb, currentNodeOffest )
-        ) {
-            uint64_t addr, size;
-            int errCode = ParseNodeRegister( pDtb, currentNodeOffest, &addr, &size );
-            if( errCode < 0 )
-            {
-                hcf();
-            }
-
-            if( *pRamCount < maxRamCount )
-            {
-                pRam[*pRamCount] = (mem_block_t) { .baseAddr = addr, .size = size };
-            }
-            else break;
-        }
-    }
-}
-
 // TODO: err check all props
 void ParseDtb( const void* pDtb )
 {
@@ -236,14 +205,14 @@ void ParseDtb( const void* pDtb )
         {
             int lenOrErrCodeHolder;
             const uint32_t* const pIntParent = fdt_getprop( pDtb, currentNodeOffest, "interrupt-parent", &lenOrErrCodeHolder );
-            if( !pHandle )
+            if( !pIntParent )
             {
                 // err lenOrErrCodeHolder
             }
 
             int numInterruptsOrErrCodeHolder;
             const uint32_t* pInterrupts = fdt_getprop( pDtb, currentNodeOffest, "interrupts", &lenOrErrCodeHolder );
-            if( !pHandle )
+            if( !pInterrupts )
             {
                 // err lenOrErrCodeHolder
             }

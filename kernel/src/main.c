@@ -11,38 +11,43 @@
 #include "arch/interrupts.h"
 #include "device/dtb_parse.h"
 #include "font/font.h"
-#include "device/memory.h"
+#include "memory/memory.h"
 
-
-
-//static void PrintStrSerial( const char* str )
-//{
-//    while( *str ) {
-//        PutCharSerial( *(str++) );
-//    }
-//}
-
-// Set the base revision to 3, this is recommended as this is the latest
-// base revision described by the Limine boot protocol specification.
-// See specification for further info.
-__attribute__((used, section(".requests")))
-static volatile LIMINE_BASE_REVISION(3);
 
 // The Limine requests can be placed anywhere, but it is important that
 // the compiler does not optimise them away, so, usually, they should
 // be made volatile or equivalent, _and_ they should be accessed at least
 // once or marked as used with the "used" attribute as done here.
 
+
+// Set the base revision to 3, this is recommended as this is the latest
+// base revision described by the Limine boot protocol specification.
+// See specification for further info.
+__attribute__((used, section(".requests")))
+static volatile LIMINE_BASE_REVISION( LIMINE_API_REVISION );
+
+__attribute__((used, section(".requests")))
+static volatile struct limine_memmap_request memmap_request = {
+    .id = LIMINE_MEMMAP_REQUEST,
+    .revision = LIMINE_API_REVISION
+};
+
+__attribute__((used, section(".requests")))
+static volatile struct limine_hhdm_request hhdm_request = {
+    .id = LIMINE_HHDM_REQUEST,
+    .revision = LIMINE_API_REVISION
+};
+
 __attribute__((used, section(".requests")))
 static volatile struct limine_framebuffer_request framebuffer_request = {
     .id = LIMINE_FRAMEBUFFER_REQUEST,
-    .revision = 0
+    .revision = LIMINE_API_REVISION
 };
 
 __attribute__((used, section(".requests")))
 static volatile struct limine_dtb_request dtb_request = {
     .id = LIMINE_DTB_REQUEST,
-    .revision = 0
+    .revision = LIMINE_API_REVISION
 };
 
 // Finally, define the start and end markers for the Limine requests.
@@ -53,65 +58,6 @@ static volatile LIMINE_REQUESTS_START_MARKER;
 __attribute__((used, section(".requests_end_marker")))
 static volatile LIMINE_REQUESTS_END_MARKER;
 
-
-// LINKER_SYMBOLS
-extern uint8_t __kernel_start[];
-extern uint8_t __kernel_end[];
-//================================
-
-// GCC and Clang reserve the right to generate calls to the following
-// 4 functions even if they are not directly called.
-// Implement them as the C specification mandates.
-// DO NOT remove or rename these functions, or stuff will eventually break!
-// They CAN be moved to a different .c file.
-
-void *memcpy(void *dest, const void *src, size_t n) {
-    uint8_t *pdest = (uint8_t *)dest;
-    const uint8_t *psrc = (const uint8_t *)src;
-
-    for (size_t i = 0; i < n; i++) {
-        pdest[i] = psrc[i];
-    }
-
-    return dest;
-}
-void *memset(void *s, int c, size_t n) {
-    uint8_t *p = (uint8_t *)s;
-
-    for (size_t i = 0; i < n; i++) {
-        p[i] = (uint8_t)c;
-    }
-
-    return s;
-}
-void *memmove(void *dest, const void *src, size_t n) {
-    uint8_t *pdest = (uint8_t *)dest;
-    const uint8_t *psrc = (const uint8_t *)src;
-
-    if (src > dest) {
-        for (size_t i = 0; i < n; i++) {
-            pdest[i] = psrc[i];
-        }
-    } else if (src < dest) {
-        for (size_t i = n; i > 0; i--) {
-            pdest[i-1] = psrc[i-1];
-        }
-    }
-
-    return dest;
-}
-int memcmp(const void *s1, const void *s2, size_t n) {
-    const uint8_t *p1 = (const uint8_t *)s1;
-    const uint8_t *p2 = (const uint8_t *)s2;
-
-    for (size_t i = 0; i < n; i++) {
-        if (p1[i] != p2[i]) {
-            return p1[i] < p2[i] ? -1 : 1;
-        }
-    }
-
-    return 0;
-}
 
 
 typedef struct framebuffer_t 
@@ -248,78 +194,37 @@ void QPrint( const char* string, uint32_t rgb )
     }
 }
 
-typedef int (*CompareFunc)(const void*, const void*);
-
-void InsertionSort( uint8_t* arrayBase, uint64_t elemCount, uint64_t elemSize, CompareFunc pCompareFunctor ) 
-{
-    uint8_t key[256];
-    QK_CHECK( elemSize > ARRAY_LEN( key ) );
-
-    for( uint64_t i = 1; i < elemCount; i++ ) 
-    {
-        memcpy( key, arrayBase + i * elemSize, elemSize );
-
-        int64_t j = i - 1;
-        for( ; j >= 0 && pCompareFunctor( arrayBase + j * elemSize, key ) > 0; --j ) 
-        {
-            memcpy( arrayBase + (j + 1) * elemSize, arrayBase + j * elemSize, elemSize );
-        }
-        memcpy( arrayBase + (j + 1) * elemSize, key, elemSize );
-    }
-}
-
-int CompareMemBlocksByAddr( const void* const a, const void* const b ) 
-{
-    const mem_block_t* const ia = a;
-    const mem_block_t* const ib = b;
-    if( ia->baseAddr < ib->baseAddr ) return -1;
-    if( ia->baseAddr > ib->baseAddr ) return 1;
-    return 0;
-}
-
 // NOTE: this must match the name in the linker script.
 void KernelMain() 
 {
-    const uint64_t QUAKERNEL_ADDR = (uint64_t)__kernel_start;
-    const uint64_t QUAKERNEL_SIZE = (uint64_t)__kernel_end - (uint64_t)__kernel_start;
-
     // Ensure the bootloader actually understands our base revision (see spec).
     QK_CHECK( !LIMINE_BASE_REVISION_SUPPORTED );
+
+    QK_CHECK( !memmap_request.response || memmap_request.response->entry_count < 1 );
+    for( uint64_t mmEntry = 0; mmEntry < memmap_request.response->entry_count; ++mmEntry )
+    {
+        const struct limine_memmap_entry* const refThisMMEntry = 
+            memmap_request.response->entries[mmEntry];
+        if( refThisMMEntry->type == LIMINE_MEMMAP_USABLE )
+        {
+            
+        }
+    }
+
+
     QK_CHECK( !framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1 );
     QK_CHECK( !dtb_request.response || dtb_request.response->dtb_ptr == NULL );
 
-    gFbo = InitFramebuffer();
-    gFbConsole = DefaultFbConsole();
 
-    QPrint( "Hello Quakernel !", 0xff5555 );
+
+    gFbo = InitFramebuffer();
 
     const void* pDtb = dtb_request.response->dtb_ptr;
     ValidateDtb( pDtb );
-    
-    mem_block_t ramRegions[MAX_RESEVERD_PHYSICAL_MEMORY_BLOCKS];
-    uint64_t ramRegionsCount;
-    DtbGetPhysicalMemory( pDtb, ARRAY_LEN( ramRegions ), ramRegions, &ramRegionsCount );
 
-    const uint64_t fboSizeInBytes = FramebufferGetSizeInBytes( &gFbo );
-    // NOTE: ideally these should never overlap
-    // TODO: check ?
-    mem_block_t occupiedRegions[] = {
-        { .baseAddr = gFbo.address, .size = fboSizeInBytes },
-        { .baseAddr = pDtb, .size = DtbGetSize( pDtb ) },
-        { .baseAddr = QUAKERNEL_ADDR, .size = QUAKERNEL_SIZE },
-    };
-    // NOTE: makes the region computing easier
-    InsertionSort( occupiedRegions, ARRAY_LEN(occupiedRegions), sizeof( occupiedRegions[0] ), CompareMemBlocksByAddr );
+    gFbConsole = DefaultFbConsole();
 
-    // NOTE: each occupied region can split the block into at most 2 free regions
-    const uint64_t MAX_FREE_MEM_BLOCKS = 2 * ARRAY_LEN( occupiedRegions ) * MAX_RESEVERD_PHYSICAL_MEMORY_BLOCKS;
-    mem_block_t freeMemBlocks[MAX_FREE_MEM_BLOCKS];
-    uint64_t freeMemBlocksCount = 0;
-
-    QKEmitFreeAlignedMemBlocks( 
-        ramRegions, ramRegionsCount, occupiedRegions, ARRAY_LEN(occupiedRegions), freeMemBlocks, &freeMemBlocksCount 
-    );
-
+    QPrint( "Hello Quakernel !", 0xff5555 );
 
     // We're done, just hang...
     hcf();

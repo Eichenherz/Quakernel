@@ -13,4 +13,15 @@ inline uint64_t AlignUp( uint64_t value, uint64_t alignment )
     return (value + alignment - 1) & ~(alignment - 1);
 }
 
+typedef int (*CompareFunc)(const void*, const void*);
+
+extern void InsertionSort( uint8_t* arrayBase, uint64_t elemCount, uint64_t elemSize, CompareFunc pCompareFunc );
+
+enum binary_prefixes : uint64_t {
+    KiB = 1ULL << 10,   // 1024 bytes
+    MiB = 1ULL << 20,   // 1,048,576 bytes
+    GiB = 1ULL << 30,   // 1,073,741,824 bytes
+    TiB = 1ULL << 40    // 1,099,511,627,776 bytes
+};
+
 #endif
