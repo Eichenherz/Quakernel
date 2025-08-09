@@ -51,14 +51,18 @@
  */
 
 /* Magic numbers for the algorithm */
-#if LONG_BIT == 32
-static const unsigned long mask01 = 0x01010101;
-static const unsigned long mask80 = 0x80808080;
-#elif LONG_BIT == 64
-static const unsigned long mask01 = 0x0101010101010101;
-static const unsigned long mask80 = 0x8080808080808080;
+#if defined(__SIZEOF_LONG__)
+  #if __SIZEOF_LONG__ == 4
+    static const unsigned long mask01 = 0x01010101;
+    static const unsigned long mask80 = 0x80808080;
+  #elif __SIZEOF_LONG__ == 8
+    static const unsigned long mask01 = 0x0101010101010101;
+    static const unsigned long mask80 = 0x8080808080808080;
+  #else
+    #error Unsupported long size
+  #endif
 #else
-#error Unsupported word size
+  #error Cannot determine size of long
 #endif
 
 #define LONGPTR_MASK (sizeof(long) - 1)

@@ -255,31 +255,6 @@ int strcmp(const char* s1, const char* s2);
 int strncmp(const char* s1, const char* s2, size_t n);
 
 /**
- * @brief Duplicate the passed in string str.
- *
- * Returns a pointer to a new string which is a duplicate of the string str.
- * Memory for the new string is obtained with malloc(3), and can be freed with free(3).
- *
- * @param str a pointer to a string to duplicate
- * @return a pointer to the duplicated string on success. NULL if insufficient memory was available,
- * with errno set to indicate cause of error.
- * */
-char* strdup(const char* str);
-
-/**
- * @brief Duplicate n bytes of the passed in string str.
- *
- * strndup is similar to @sa strdup, but copies at most n bytes.
- * If str is longer than n, only n bytes are copied, and a terminating null byte ('\0') is added.
- *
- * @param str a pointer to a string to duplicate
- * @param n maximum number of bytes to copy
- * @return a pointer to the duplicated string on success. NULL if insufficient memory was available,
- * with errno set to indicate cause of error.
- * */
-char* strndup(const char* str, size_t n);
-
-/**
  * @brief Finds the first occurrence of c in the null-terminated byte string pointed to by s.
  *
  * Finds the first occurrence of c (after conversion to char as if by (char)c ) in the

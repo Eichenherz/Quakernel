@@ -4,8 +4,6 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-#include "memory.h"
-
 extern void         ValidateDtb( const void* pDtb );
 
 #endif

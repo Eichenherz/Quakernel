@@ -2,6 +2,8 @@
 #include "uart.h"
 #include "../arch/interrupts.h"
 
+#include "../lib/c_macros.h"
+
 #include <libfdt.h>
 
 const char DTB_DEVICE_STATUS_OKAY[] = "okay";
@@ -14,23 +16,6 @@ typedef struct dtb_interrupt_request
     uint16_t requestNum;
 } dtb_interrupt_request;
 
-
-typedef enum dtb_uint_type : uint8_t 
-{
-    DTB_UINT_NONE = 0,
-    DTB_UINT_U32,
-    DTB_UINT_U64
-} uint_type;
-
-typedef struct dtb_size_t 
-{
-    dtb_uint_type type;
-    union 
-    {
-        uint32_t u32;
-        uint64_t u64;
-    };
-} dtb_size_t;
 
 // NOTE: it's common for kernels to treat missing status as "enabled"
 static bool CheckOkFdtNodeStatus( const void* pDtb, int nodeOffset )

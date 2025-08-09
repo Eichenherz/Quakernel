@@ -43,8 +43,8 @@ override CPPFLAGS := \
     -I limine \
     -I kernel/src \
     -isystem third_party/freestnd_c_hdrs/include \
-    -isystem nostdinc/include \
-    -isystem kernel/src/lib
+    -isystem nolibc/include \
+    -isystem kernel/src/lib \
     $(CPPFLAGS) \
     -DLIMINE_API_REVISION=3 \
     -MMD \
@@ -129,12 +129,12 @@ override LDFLAGS += \
     -static \
     -z max-page-size=0x1000 \
     --gc-sections \
-    -T linker_scripts/$(ARCH).lds
+    -T  kernel/linker_scripts/$(ARCH).lds
 
 # Use "find" to glob all *.c, *.S, and *.asm files in the tree and obtain the
 # object and header dependency file names.
 override THIRD_PARTY := $(shell find third_party -type f -name '*.c' | grep -v '^third_party/cc_runtime/')
-override NOSTDINC := $(shell find nostdinc/src -type f -name '*.c' | LC_ALL=C sort)
+override NOSTDINC := $(shell find nolibc/src -type f -name '*.c' | LC_ALL=C sort)
 override CC_RUNTIME := $(shell find -L third_party/cc_runtime -type f -name '*.c' | LC_ALL=C sort)
 override KERNEL_SRC := $(shell find kernel/src -type f -name '*.c' ! -path 'kernel/src/arch/*')
 override ARCH_SRCS := $(shell find kernel/src/arch/$(ARCH) -type f -name '*.c' | LC_ALL=C sort)

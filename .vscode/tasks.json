@@ -11,10 +11,14 @@
         "ARCH=${input:arch}",
         "BUILD=${input:build}"
       ],
-      "group": "build",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
       "presentation": {
         "reveal": "always"
-      }
+      },
+      "problemMatcher": []
     }
   ],
   "inputs": [
@@ -22,8 +26,8 @@
       "id": "toolchain",
       "type": "pickString",
       "description": "Select Toolchain",
-      "options": ["clang", "gcc"],
-      "default": "clang"
+      "options": ["llvm", "gcc"],
+      "default": "llvm"
     },
     {
       "id": "arch",

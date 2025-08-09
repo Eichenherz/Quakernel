@@ -1,11 +1,13 @@
 #include "../interrupts.h"
 
+#include <string.h>
+
 __attribute__((noreturn))
 void hcf() 
 {
     for(;;) 
     {
-        asm volatile ("wfi"); // Wait For Interrupt — optional, saves power
+        asm volatile ("wfi"); // Wait For Interrupt, saves power
     }
 }
 

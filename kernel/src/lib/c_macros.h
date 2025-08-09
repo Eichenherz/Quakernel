@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "../arch/assert.h"
+
 // NOTE: yes, i lkie clang
 #ifndef __clang__
 #error "Provide your own non-clang stuff"

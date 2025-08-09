@@ -8,10 +8,10 @@
 #include <c_macros.h>
 #include <c_lib.h>
 
+#include "memory/memory.h"
 #include "arch/interrupts.h"
 #include "device/dtb_parse.h"
 #include "font/font.h"
-#include "memory/memory.h"
 
 
 // The Limine requests can be placed anywhere, but it is important that
@@ -194,23 +194,46 @@ void QPrint( const char* string, uint32_t rgb )
     }
 }
 
+static mem_linear_arena_t preInitArena;
+
 // NOTE: this must match the name in the linker script.
 void KernelMain() 
 {
     // Ensure the bootloader actually understands our base revision (see spec).
     QK_CHECK( !LIMINE_BASE_REVISION_SUPPORTED );
 
+    QK_CHECK( !hhdm_request.response );
+
+    // NOTE: limine mem blocks with USABLE are guaranteed to be 4Kib alligned.
     QK_CHECK( !memmap_request.response || memmap_request.response->entry_count < 1 );
     for( uint64_t mmEntry = 0; mmEntry < memmap_request.response->entry_count; ++mmEntry )
     {
         const struct limine_memmap_entry* const refThisMMEntry = 
             memmap_request.response->entries[mmEntry];
-        if( refThisMMEntry->type == LIMINE_MEMMAP_USABLE )
-        {
-            
+        if( refThisMMEntry->type == LIMINE_MEMMAP_USABLE && refThisMMEntry->length >= 8 * KiB )
+        {   
+            mem_block_t memBlock = { 
+                .baseAddr = refThisMMEntry->base + hhdm_request.response->offset, 
+                .size = refThisMMEntry->length 
+            };
+            preInitArena = MemLinearArenaCreate( memBlock );
+            break;
         }
     }
 
+
+    for( uint64_t mmEntry = 0; mmEntry < memmap_request.response->entry_count; ++mmEntry )
+    {
+        const struct limine_memmap_entry* const refThisMMEntry = 
+            memmap_request.response->entries[mmEntry];
+        if( refThisMMEntry->type == LIMINE_MEMMAP_USABLE && refThisMMEntry->length >= 8 * KiB )
+        {   
+            mem_block_t memBlock = { 
+                .baseAddr = refThisMMEntry->base + hhdm_request.response->offset, 
+                .size = refThisMMEntry->length 
+            };
+        }
+    }
 
     QK_CHECK( !framebuffer_request.response || framebuffer_request.response->framebuffer_count < 1 );
     QK_CHECK( !dtb_request.response || dtb_request.response->dtb_ptr == NULL );

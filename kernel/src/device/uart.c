@@ -37,13 +37,13 @@ typedef enum uart_16550A_register : uint8_t
 // NOTE: Standard 16550 UART will always contain 8 bits of data
 // NOTE: we must read/write the entier register and mask the first byte
 
-volatile uint8_t Uart16550AReadRegister( 
-    const void* const       baseAddr, 
+uint8_t Uart16550AReadRegister( 
+    const uint8_t* const    baseAddr, 
     uint8_t                 regShift, 
     uint8_t                 regIOWidth, 
     uart_16550A_register    uartReg 
 ) {
-    volatile const void* const reg = baseAddr + (uartReg << regShift);
+    volatile const uint8_t* const reg = baseAddr + (uartReg << regShift);
 
     uint8_t dataOut;
     switch( regIOWidth )
@@ -61,21 +61,20 @@ volatile uint8_t Uart16550AReadRegister(
         dataOut = *(volatile const uint64_t* const)reg & 0xFF;
         break;
     default:
-    //panic
-    break;
+       break;
     }
 
     return dataOut;
 }
 
-volatile void Uart16550AWriteRegister( 
-    void* const             baseAddr, 
+void Uart16550AWriteRegister( 
+    uint8_t* const          baseAddr, 
     uint8_t                 regShift, 
     uint8_t                 regIOWidth, 
     uart_16550A_register    uartReg, 
     uint8_t                 dataIn 
 ) {
-    volatile void* const reg = baseAddr + (uartReg << regShift);
+    volatile uint8_t* const reg = baseAddr + (uartReg << regShift);
 
     switch( regIOWidth )
     {
@@ -101,14 +100,14 @@ bool UartTryReadByteFromRegister( const uart_port* const uartPort, char byte, ui
 {   
     *_out = 0;
 
-    if( UART_STD_16550A == uartPort.std )
+    if( UART_STD_16550A == uartPort->std )
     {
         uint8_t lsr = Uart16550AReadRegister(
-            uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_LSR);
+            (uint8_t*) uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_LSR);
         if( 0x01 == lsr )
         {
             uint8_t data = Uart16550AReadRegister(
-                uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_RBR);
+                (uint8_t*) uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_RBR);
             *_out = data;
             return true;
         }
@@ -123,14 +122,14 @@ bool UartTryReadByteFromRegister( const uart_port* const uartPort, char byte, ui
 }
 bool UartTryWriteByteToRegister( const uart_port* uartPort, uint8_t dataIn )
 {
-    if( UART_STD_16550A == uartPort.std )
+    if( UART_STD_16550A == uartPort->std )
     {
         uint8_t lsr = Uart16550AReadRegister(
-            uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_LSR);
+            (uint8_t*) uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_LSR);
         if( 0x01 == lsr )
         {
             Uart16550AWriteRegister(
-                uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_THR, dataIn);
+               (uint8_t*) uartPort->baseAddr, uartPort->regShift, uartPort->regIOWidthInBytes, UART_16550A_REG_THR, dataIn);
             return true;
         }
 

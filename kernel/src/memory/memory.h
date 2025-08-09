@@ -11,7 +11,7 @@ typedef struct mem_block_t
 } mem_block_t;
 
 
-inline int CompareMemBlocksByAddr( const void* const a, const void* const b ) 
+inline int MemCompareBlocksByAddr( const void* const a, const void* const b ) 
 {
     const mem_block_t* const ia = a;
     const mem_block_t* const ib = b;
@@ -20,20 +20,29 @@ inline int CompareMemBlocksByAddr( const void* const a, const void* const b )
     return 0;
 }
 
+typedef struct mem_linear_arena_t
+{
+    mem_block_t memBlock;
+    uint64_t used;
+} mem_linear_arena_t;
+
+// NOTE: https://github.com/riscv-non-isa/riscv-elf-psabi-doc/blob/master/riscv-cc.adoc#integer-calling-convention
+extern mem_linear_arena_t MemLinearArenaCreate( mem_block_t memBlock );
+// NOTE: if no more space is left it will return NULL
+extern uint8_t* MemLinearArenaAlloc( mem_linear_arena_t* const linearArena, uint64_t sizeInBytes );
+extern void MemLinearReset( mem_linear_arena_t* const linearArena );
 // NOTE: we just assume here
-const uint64_t MAX_PAGES_TOTAL = (uint16_t)(-1);
+#define  MAX_PAGES_TOTAL (uint64_t) (uint16_t)(-1);
 
 extern const uint64_t MAX_PHYSICAL_PAGE_SIZE;
 
 typedef struct qk_ppm // Quakernel Physical Mem Manager
 {
-    mem_block_t memRegions[MAX_RESEVERD_PHYSICAL_MEMORY_REGIONS];
-    uint64_t pageBitMap[ ( MAX_PAGES_TOTAL + 63 ) / 64 ];
+    mem_block_t* memRegions;
+    uint64_t* pageBitMap;
     uint16_t pagesCount;
     uint8_t memRegionsCount;
 } qk_ppm_t;
-
-extern void QKInitPhysicalMemory();
 
 // NOTE: occupiedRegions MUST BE SORTED !
 extern void QKEmitFreeAlignedMemBlocks( 
@@ -45,5 +54,13 @@ extern void QKEmitFreeAlignedMemBlocks(
     uint64_t* restrict      pFreeMemBlocksCount
 );
 
+inline uint64_t AlignDown( uint64_t value, uint64_t alignment ) 
+{
+    return value & ~(alignment - 1);
+}
+inline uint64_t AlignUp( uint64_t value, uint64_t alignment ) 
+{
+    return (value + alignment - 1) & ~(alignment - 1);
+}
 
 #endif

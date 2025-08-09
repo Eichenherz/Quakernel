@@ -1,7 +1,5 @@
 #include <stdint.h>
 
-extern void hcf();
-
 typedef enum interrupt_controller_type : int8_t 
 {
     INC_INVALID = 0,

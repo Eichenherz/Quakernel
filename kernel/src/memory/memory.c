@@ -3,14 +3,6 @@
 #include <c_macros.h>
 #include <c_lib.h>
 
-
-void QKInitPhysicalMemory( const mem_block_t* pRamRegions, uint64_t ramRegionsCount )
-{
-
-
-
-}
-
 void QKEmitFreeAlignedMemBlocks( 
     const mem_block_t*      memRegions, 
     uint64_t                memRegionsCount, 

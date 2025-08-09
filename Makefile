@@ -40,30 +40,26 @@ ifeq ($(BUILD),Debug)
   LDFLAGS :=
 endif
 
-# User controllable toolchain and toolchain prefix.
-TOOLCHAIN :=
-TOOLCHAIN_PREFIX :=
-ifneq ($(TOOLCHAIN),)
-    ifeq ($(TOOLCHAIN_PREFIX),)
-        TOOLCHAIN_PREFIX := $(TOOLCHAIN)-
-    endif
-endif
-
-# User controllable C compiler command.
-ifneq ($(TOOLCHAIN_PREFIX),)
-    CC := $(TOOLCHAIN_PREFIX)gcc
-else
-    CC := cc
-endif
+# User controllable toolchain.
+TOOLCHAIN ?=  # empty by default
 
 # User controllable linker command.
-LD := $(TOOLCHAIN_PREFIX)ld
+LD := ld
 
-# Defaults overrides for variables if using "llvm" as toolchain.
-ifeq ($(TOOLCHAIN),llvm)
+# Determine CC based on TOOLCHAIN
+ifeq ($(TOOLCHAIN),)
+    CC := cc
+else ifeq ($(TOOLCHAIN),gcc)
+    CC := gcc
+else ifeq ($(TOOLCHAIN),llvm)
     CC := clang
     LD := ld.lld
+else
+    # If TOOLCHAIN is something else, assume it's a prefix or full compiler name
+    CC := $(TOOLCHAIN)
 endif
+
+
 
 .PHONY: build-iso
 build-iso: $(IMAGE_NAME).iso

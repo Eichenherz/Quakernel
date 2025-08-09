@@ -119,7 +119,8 @@
 		"string.h": "c",
 		"compare": "c",
 		"type_traits": "c",
-		"utility": "c"
+		"utility": "c",
+		"cstdlib": "c"
 	},
 	"makefile.configureOnOpen": false
 }

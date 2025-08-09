@@ -1,4 +1,7 @@
 #include "c_lib.h"
+#include "c_macros.h"
+
+#include <string.h>
 
 void InsertionSort( uint8_t* arrayBase, uint64_t elemCount, uint64_t elemSize, CompareFunc pCompareFunc ) 
 {
