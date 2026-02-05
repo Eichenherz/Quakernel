@@ -1,20 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ARCH="${1:-x86_64}"
-IMAGE="${2:?Error: IMAGE is required as third argument}"
+#ARCH="${1:-riscv64}"
+ARCH="riscv64"
+IMAGE="${1:?Error: IMAGE is required as third argument}"
 
 
 # Select QEMU binary per arch
 QEMU_BIN="qemu-system-$ARCH"
 # Default user QEMU flags. These are appended to the QEMU command calls.
-QEMUFLAGS= "-m 4G"
+QEMUFLAGS="-m 4G"
 
 case "$ARCH" in
     riscv64) MACH="-M virt -cpu rv64" ;;
-    loongarch64) MACH="-M virt -cpu la464 " ;;
-    aarch64) MACH="-M virt -cpu cortex-a72" ;;
-    x86_64) MACH="-M q35" ;;
+    #loongarch64) MACH="-M virt -cpu la464 " ;;
+    #aarch64) MACH="-M virt -cpu cortex-a72" ;;
+    #x86_64) MACH="-M q35" ;;
     *) echo "Unsupported arch: $ARCH" && exit 1 ;;
 esac
 

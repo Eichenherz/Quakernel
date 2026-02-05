@@ -1,7 +1,6 @@
 /ovmf
 /build
 /log
-*.iso
-*.hdd
 /bin_*
 /obj_*
+/Images
