@@ -9,6 +9,6 @@ Based on limine-c-template.
 
 ## RUN:
  Build Image: make TOOLCHAIN=llvm build-hdd ( llvm is default so put anything you want there )
-
+ Example run: ./run_qemu.sh Images/Quakernel_ReleaseWithDebugInfo_riscv64.hdd
 
 ## TODO

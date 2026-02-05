@@ -11,6 +11,11 @@ QEMU_BIN="qemu-system-$ARCH"
 # Default user QEMU flags. These are appended to the QEMU command calls.
 QEMUFLAGS="-m 4G"
 
+if [[ "${2:-}" == "--debug" ]]; then
+  QEMUFLAGS+=" -S -gdb tcp::1234 -serial mon:stdio" # DON'T forget the leading space
+  echo "QEMU_GDB_READY tcp::1234"
+fi
+
 case "$ARCH" in
     riscv64) MACH="-M virt -cpu rv64" ;;
     #loongarch64) MACH="-M virt -cpu la464 " ;;
@@ -25,18 +30,12 @@ if [[ "$ARCH" == "x86_64" ]]; then
     DEVICES=""
 fi
 
-# UEFI firmware (OVMF)
-OVMF="ovmf/ovmf-code-$ARCH.fd"
+rm -rf edk2-ovmf
+curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -xf -
 
-rm -rf ovmf
-mkdir -p ovmf
-[ -f "$OVMF" ] || {
-  curl -Lo "$OVMF" "https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/ovmf-code-$ARCH.fd"
-  case "$ARCH" in
-    aarch64) dd if=/dev/zero of="$OVMF" bs=1 count=0 seek=67108864 status=none ;;
-    riscv64) dd if=/dev/zero of="$OVMF" bs=1 count=0 seek=33554432 status=none ;;
-  esac
-}
+# UEFI firmware (OVMF)
+OVMF_CODE_FD="edk2-ovmf/ovmf-code-$ARCH.fd"
+
 
 MEDIA="${IMAGE##*.}" 
 if [[ "$MEDIA" == "iso" ]]; then
@@ -44,7 +43,7 @@ if [[ "$MEDIA" == "iso" ]]; then
     DRIVE="-cdrom $IMAGE"
 elif [[ "$MEDIA" == "hdd" ]]; then
     [ -f "$IMAGE" ] || { echo "Missing $IMAGE. Run: make $IMAGE"; exit 1; }
-    DRIVE="-hda $IMAGE"
+    DRIVE="-drive file=$IMAGE,format=raw,if=virtio"
 else
     echo "Invalid MEDIA: $MEDIA (expected 'iso' or 'hdd')"
     exit 1
@@ -54,6 +53,6 @@ fi
 exec $QEMU_BIN \
     $MACH \
     $DEVICES \
-    -drive if=pflash,unit=0,format=raw,file="$OVMF",readonly=on \
+    -drive if=pflash,unit=0,format=raw,file="$OVMF_CODE_FD",readonly=on \
     $DRIVE \
     ${QEMUFLAGS:-}

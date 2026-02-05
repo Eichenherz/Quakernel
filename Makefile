@@ -11,7 +11,7 @@ ifeq ($(filter $(ARCH), riscv64 ),)
 endif
 
 # Build modes
-BUILD ?= ReleaseWithDebugInfo
+BUILD ?= Debug
 
 ifeq ($(filter $(BUILD),Release ReleaseWithDebugInfo Debug),)
     $(error $(BUILD) not supported)
@@ -68,12 +68,14 @@ build-iso: $(IMAGE_NAME).iso
 build-hdd: $(IMAGE_NAME).hdd
 
 limine/limine:
+	rm -rf limine
+	git clone https://codeberg.org/Limine/Limine.git limine --branch=v10.x-binary --depth=1
 	$(MAKE) -C limine \
 		CC="$(CC)" \
 		CFLAGS="$(CFLAGS)" \
 		CPPFLAGS="$(CPPFLAGS)" \
-		LDFLAGS="$(LDFLAGS)" 
-# LIBS="$(HOST_LIBS)"
+		LDFLAGS="$(LDFLAGS)" \
+		LIBS="$(HOST_LIBS)"
 
 .PHONY: kernel
 kernel:
@@ -126,4 +128,4 @@ clean:
 .PHONY: distclean
 distclean:
 	$(MAKE) -C kernel distclean
-	rm -rf iso_root *.iso *.hdd kernel-deps limine
+	rm -rf iso_root *.iso *.hdd limine

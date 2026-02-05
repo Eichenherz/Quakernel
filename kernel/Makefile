@@ -40,7 +40,7 @@ override CFLAGS += \
 # Internal C preprocessor flags that should not be changed by the user. # freestnd-c-hdrs/include 
 override CPPFLAGS := \
     -I third_party/libfdt/src \
-    -I limine \
+    -I third_party/limine-protocol/include \
     -I kernel/src \
     -isystem third_party/freestnd_c_hdrs/include \
     -isystem nolibc/include \
@@ -78,6 +78,7 @@ ifeq ($(ARCH),x86_64)
         -f elf64 \
         $(NASMFLAGS)
 endif
+
 ifeq ($(ARCH),aarch64)
     ifeq ($(CC_IS_CLANG),1)
         override CC += \
@@ -90,6 +91,7 @@ ifeq ($(ARCH),aarch64)
     override LDFLAGS += \
         -m aarch64elf
 endif
+
 ifeq ($(ARCH),riscv64)
     ifeq ($(CC_IS_CLANG),1)
         override CC += \
@@ -107,6 +109,7 @@ ifeq ($(ARCH),riscv64)
         -m elf64lriscv \
         --no-relax
 endif
+
 ifeq ($(ARCH),loongarch64)
     ifeq ($(CC_IS_CLANG),1)
         override CC += \

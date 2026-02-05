@@ -1,0 +1,19 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Quakernel: QEMU HDD + LLDB attach",
+      "type": "lldb",
+      "request": "custom",
+      "cwd": "${workspaceFolder}",
+      "preLaunchTask": "qemu: run hdd (debug)",
+      "postDebugTask": "qemu: stop",
+      "targetCreateCommands": [
+        "target create --arch riscv64 \"${workspaceFolder}/bin_Debug_riscv64/kernel\""
+      ],
+      "processCreateCommands": [
+        "gdb-remote 127.0.0.1:1234"
+      ]
+    }
+  ]
+}

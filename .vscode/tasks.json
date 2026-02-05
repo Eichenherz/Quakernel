@@ -2,46 +2,43 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "Build HDD",
+      "label": "qemu: run hdd (debug)",
       "type": "shell",
-      "command": "make",
+      "command": "${workspaceFolder}/run_qemu.sh",
       "args": [
-        "build-hdd",
-        "TOOLCHAIN=${input:toolchain}",
-        "ARCH=${input:arch}",
-        "BUILD=${input:build}"
+        "${workspaceFolder}/Images/Quakernel_Debug_riscv64.hdd",
+        "--debug"
       ],
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": [
+        {
+          "owner": "qemu",
+          "pattern": [
+            { "regexp": ".*" }
+          ],
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": ".*",
+            "endsPattern": "^QEMU_GDB_READY tcp::1234$"
+          }
+        }
+      ],
       "presentation": {
-        "reveal": "always"
-      },
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": false
+      }
+    },
+    {
+      "label": "qemu: stop",
+      "type": "shell",
+      "command": "bash",
+      "args": [
+        "-lc",
+        "pkill -f \"qemu-system-riscv64.*-gdb tcp::1234\" || true"
+      ],
       "problemMatcher": []
-    }
-  ],
-  "inputs": [
-    {
-      "id": "toolchain",
-      "type": "pickString",
-      "description": "Select Toolchain",
-      "options": ["llvm", "gcc"],
-      "default": "llvm"
-    },
-    {
-      "id": "arch",
-      "type": "pickString",
-      "description": "Select Architecture",
-      "options": ["x86_64", "aarch64", "riscv64", "loongarch64"],
-      "default": "x86_64"
-    },
-    {
-      "id": "build",
-      "type": "pickString",
-      "description": "Select Build Mode",
-      "options": ["Release", "ReleaseWithDebugInfo", "Debug"],
-      "default": "ReleaseWithDebugInfo"
     }
   ]
 }

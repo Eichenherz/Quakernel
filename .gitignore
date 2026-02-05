@@ -1,6 +1,7 @@
-/ovmf
+/edk2-ovmf
 /build
 /log
 /bin_*
 /obj_*
 /Images
+/limine
